@@ -1,131 +1,154 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import 'react-native-gesture-handler';
+import React, { useState, useEffect } from 'react';
+import { Linking, AppState, AppStateStatus } from 'react-native';
+import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { createDrawerNavigator } from '@react-navigation/drawer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Provider as PaperProvider } from 'react-native-paper';
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import LoginScreen from './src/screen/LoginScreen';
+import RegisterScreen from './src/screen/RegisterScreen';
+import TripsScreen from './src/screen/TripsScreen';
+import CreateTripScreen from './src/screen/CreateTripScreen';
+import TripDetailsScreen from './src/screen/TripDetailsScreen';
+import InviteParticipantsScreen from './src/screen/InviteParticipantsScreen';
+import InvitationHandlerScreen from './src/screen/InvitationHandlerScreen';
+import ItineraryScreen from './src/screen/ItineraryScreen';
+import ChatScreen from './src/screen/ChatScreen';
+import DashboardScreen from './src/screen/DashboardScreen';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+import CustomDrawerContent from './src/components/CustomDrawerContent';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+const Stack = createStackNavigator();
+const Drawer = createDrawerNavigator();
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  Invitation: { tripId: string, email: string };
+  DrawerNav: undefined;
+};
+
+const linking: LinkingOptions<RootStackParamList> = {
+  prefixes: ['tripsync://', 'https://tripsync.app'],
+  config: {
+    screens: {
+      Login: 'login',
+      Register: 'register',
+      Invitation: {
+        path: 'invite',
+        parse: {
+          tripId: (tripId: string): string => tripId,
+          email: (email: string): string => decodeURIComponent(email)
+        }
+      },
+      DrawerNav: 'app'
+    }
+  }
+};
+
+const TripsStack = () => {
   return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="TripsMain" component={TripsScreen} />
+      <Stack.Screen name="TripDetails" component={TripDetailsScreen} />
+      <Stack.Screen name="CreateTrip" component={CreateTripScreen} />
+      <Stack.Screen name="InviteParticipants" component={InviteParticipantsScreen} />
+      <Stack.Screen name="Itinerary" component={ItineraryScreen} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
+    </Stack.Navigator>
   );
-}
+};
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+const DrawerNavigation = () => {
+  return (
+    <Drawer.Navigator 
+      initialRouteName="Dashboard"
+      drawerContent={props => <CustomDrawerContent {...props} />}
+      screenOptions={{
+        headerShown: false, 
+      }}
+    >
+      <Drawer.Screen name="Dashboard" component={DashboardScreen} />
+      <Drawer.Screen name="Trips" component={TripsStack} />
+    </Drawer.Navigator>
+  );
+};
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+const App = () => {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    checkToken();
+
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        console.log('App opened with initial URL:', url);
+      }
+    }).catch(err => console.error('An error occurred getting initial URL', err));
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        checkToken();
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    const authCheckInterval = setInterval(checkToken, 1000);
+
+    return () => {
+      subscription.remove();
+      clearInterval(authCheckInterval);
+    };
+  }, []);
+  
+  const handleDeepLink = (event: { url: string }) => {
+    const { url } = event;
+    console.log('Deep link received:', url);
   };
 
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the recommendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+  const checkToken = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      setIsLoggedIn(!!token);
+    } catch (error) {
+      console.log('Failed to get token', error);
+      setIsLoggedIn(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return null;
+  }
 
   return (
-    <View style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </View>
+    <PaperProvider>
+      <NavigationContainer linking={linking}>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {isLoggedIn ? (
+            <Stack.Screen name="DrawerNav" component={DrawerNavigation} />
+          ) : (
+            <Stack.Screen name="Login" component={LoginScreen} />
+          )}
+          <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="Invitation" component={InvitationHandlerScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </PaperProvider>
   );
-}
-
-const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
+};
 
 export default App;

@@ -1,0 +1,100 @@
+{
+  "project_info": {
+    "project_number": "279406075787",
+    "project_id": "task-management-react-native",
+    "storage_bucket": "task-management-react-native.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:279406075787:android:c3c75c109dd55590b7198e",
+        "android_client_info": {
+          "package_name": "com.client"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "279406075787-7d2222nf7r24ut5p0liu3d8tb1innl89.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.client",
+            "certificate_hash": "040d0a8eb68f4ab1d304f0661e2cdb92d09f6aec"
+          }
+        },
+        {
+          "client_id": "279406075787-mlvgmdqfoe75sbsv0eoj62o9umg67h3i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXBztdoEsxyytU0ZxBmKmSEi4MpkUqA6Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "279406075787-mlvgmdqfoe75sbsv0eoj62o9umg67h3i.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:279406075787:android:15465a06a55ea2bbb7198e",
+        "android_client_info": {
+          "package_name": "com.taskmanagement"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "279406075787-56jljpnl67t7upjro3irpqqqvqsc9d0i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.taskmanagement",
+            "certificate_hash": "7452dc3c0ad04bf706655ce1162f05a407de8a86"
+          }
+        },
+        {
+          "client_id": "279406075787-7peiasb9o059hbcpptrth1t4n2eprb14.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.taskmanagement",
+            "certificate_hash": "040d0a8eb68f4ab1d304f0661e2cdb92d09f6aec"
+          }
+        },
+        {
+          "client_id": "279406075787-7tmc63eo0bdsp2897rfvo1v4ui10928i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.taskmanagement",
+            "certificate_hash": "16a031c192e81c8e5ebb671a2341578ace450e0b"
+          }
+        },
+        {
+          "client_id": "279406075787-mlvgmdqfoe75sbsv0eoj62o9umg67h3i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAXBztdoEsxyytU0ZxBmKmSEi4MpkUqA6Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "279406075787-mlvgmdqfoe75sbsv0eoj62o9umg67h3i.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
