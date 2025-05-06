@@ -225,6 +225,7 @@ export const reorderItineraryItems = async (req, res) => {
     const { day, items } = req.body;
 
     console.log(`Reordering itinerary items for trip: ${tripId}, day: ${day}`);
+    console.log('Items to reorder:', JSON.stringify(items));
 
     const trip = await Trip.findOne({
       _id: tripId,
@@ -253,6 +254,15 @@ export const reorderItineraryItems = async (req, res) => {
       const itineraryItem = trip.itinerary.id(item.id);
       if (itineraryItem) {
         itineraryItem.order = item.order;
+        
+        // Also update start and end times if provided
+        if (item.startTime) {
+          itineraryItem.startTime = new Date(item.startTime);
+        }
+        
+        if (item.endTime) {
+          itineraryItem.endTime = new Date(item.endTime);
+        }
       }
     }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Appbar, TextInput, Button, RadioButton, Card, Avatar } from 'react-native-paper';
 import api from '../apis/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const InviteParticipantsScreen = ({ route, navigation }) => {
   const { tripId, tripName } = route.params;
@@ -18,6 +19,33 @@ const InviteParticipantsScreen = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkUserRole = async () => {
+      try {
+        const userData = await AsyncStorage.getItem('userDetails');
+        if (userData) {
+          const user = JSON.parse(userData);
+          
+          const tripResponse = await api.getTripById(tripId);
+          if (tripResponse.success) {
+            const participant = tripResponse.data.data.participants.find(
+              p => p.email === user.email
+            );
+            
+            if (participant && participant.role === 'admin') {
+              setIsAdmin(true);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error checking user role:', err);
+      }
+    };
+    
+    checkUserRole();
+  }, [tripId]);
 
   const handleInvite = async () => {
     if (!email.trim() || !email.includes('@')) {
@@ -30,7 +58,9 @@ const InviteParticipantsScreen = ({ route, navigation }) => {
     setSuccess(false);
 
     try {
-      const response = await api.inviteToTrip(tripId, email.trim(), role);
+      // Non-admin users can only invite with viewer role
+      const inviteRole = isAdmin ? role : 'viewer';
+      const response = await api.inviteToTrip(tripId, email.trim(), inviteRole);
       
       if (response.success) {
         setSuccess(true);
@@ -101,7 +131,9 @@ const InviteParticipantsScreen = ({ route, navigation }) => {
         <View style={styles.formContainer}>
           <Text style={styles.sectionTitle}>Add participants to your trip</Text>
           <Text style={styles.sectionDescription}>
-            Invite friends by email and set their access role
+            {isAdmin 
+              ? 'Invite friends by email and set their access role'
+              : 'Invite friends by email to view your trip'}
           </Text>
 
           <TextInput
@@ -114,31 +146,43 @@ const InviteParticipantsScreen = ({ route, navigation }) => {
             autoCapitalize="none"
           />
 
-          <Text style={styles.roleTitle}>Select Role:</Text>
-          
-          <RadioButton.Group onValueChange={value => setRole(value)} value={role}>
-            {['admin', 'editor', 'viewer'].map((roleValue) => {
-              const roleInfo = getRoleDisplayInfo(roleValue);
-              return (
-                <Card key={roleValue} style={[styles.roleCard, role === roleValue && styles.selectedRoleCard]}>
-                  <Card.Content style={styles.roleCardContent}>
-                    <View style={styles.roleLeftContent}>
-                      <RadioButton value={roleValue} />
-                      <View style={styles.roleTextContainer}>
-                        <Text style={styles.roleTextTitle}>{roleInfo.title}</Text>
-                        <Text style={styles.roleTextDescription}>{roleInfo.description}</Text>
-                      </View>
-                    </View>
-                    <Avatar.Icon 
-                      size={36} 
-                      icon={roleValue === 'admin' ? 'account-key' : roleValue === 'editor' ? 'account-edit' : 'account-eye'} 
-                      style={{ backgroundColor: roleInfo.color }}
-                    />
-                  </Card.Content>
-                </Card>
-              );
-            })}
-          </RadioButton.Group>
+          {isAdmin && (
+            <>
+              <Text style={styles.roleTitle}>Select Role:</Text>
+              
+              <RadioButton.Group onValueChange={value => setRole(value)} value={role}>
+                {['editor', 'viewer'].map((roleValue) => {
+                  const roleInfo = getRoleDisplayInfo(roleValue);
+                  return (
+                    <Card key={roleValue} style={[styles.roleCard, role === roleValue && styles.selectedRoleCard]}>
+                      <Card.Content style={styles.roleCardContent}>
+                        <View style={styles.roleLeftContent}>
+                          <RadioButton value={roleValue} />
+                          <View style={styles.roleTextContainer}>
+                            <Text style={styles.roleTextTitle}>{roleInfo.title}</Text>
+                            <Text style={styles.roleTextDescription}>{roleInfo.description}</Text>
+                          </View>
+                        </View>
+                        <Avatar.Icon 
+                          size={36} 
+                          icon={roleValue === 'editor' ? 'account-edit' : 'account-eye'} 
+                          style={{ backgroundColor: roleInfo.color }}
+                        />
+                      </Card.Content>
+                    </Card>
+                  );
+                })}
+              </RadioButton.Group>
+            </>
+          )}
+
+          {!isAdmin && (
+            <View style={styles.viewerRoleInfo}>
+              <Text style={styles.viewerRoleText}>
+                Invited users will join as Viewers and can only view trip details
+              </Text>
+            </View>
+          )}
 
           {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -234,6 +278,16 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
+  viewerRoleInfo: {
+    padding: 16,
+    backgroundColor: '#f1f1f1',
+    borderRadius: 8,
+    marginBottom: 24,
+  },
+  viewerRoleText: {
+    fontSize: 14,
+    color: '#555',
+  },
   errorText: {
     color: 'red',
     marginTop: 8,
@@ -250,7 +304,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   secondaryButton: {
-    flex: 0.48,
+    flex: 1,
+    marginHorizontal: 4,
   },
 });
 

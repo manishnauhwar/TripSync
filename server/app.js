@@ -10,6 +10,12 @@ import { protect } from './middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 import User from './models/userModal.js';
 import cors from 'cors';
+import mongoose from 'mongoose';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
@@ -29,10 +35,17 @@ const corsOptions = {
   credentials: true
 };
 
+// Set up middleware
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Add this before any route handlers or auth middleware
+// Serve static files from the uploads directory - public access, no authentication required
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+console.log('Main app serving static files from:', '/uploads', '- publicly accessible');
+
+// Logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} | ${req.method} ${req.url}`);
   console.log('Headers:', JSON.stringify(req.headers));
@@ -67,13 +80,26 @@ io.on('connection', (socket) => {
                 const { tripId, content, type, mediaUrl, location } = data;
                 
                 try {
+                    const user = await User.findById(userId).select('username fullName email');
+                    if (!user) {
+                        console.error('User not found for message:', userId);
+                        return;
+                    }
+                    
                     io.to(`trip-${tripId}`).emit('new-message', {
-                        sender: userId,
+                        _id: new mongoose.Types.ObjectId().toString(),
+                        sender: {
+                            _id: userId,
+                            username: user.username,
+                            fullName: user.fullName,
+                            email: user.email
+                        },
                         content,
                         type,
                         mediaUrl,
                         location,
-                        createdAt: new Date()
+                        createdAt: new Date(),
+                        readBy: [userId]
                     });
                 } catch (error) {
                     console.error('Error sending message:', error);

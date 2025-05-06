@@ -1,29 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  FlatList,
-  ActivityIndicator,
-  Alert,
-  Animated,
-  KeyboardAvoidingView,
-  Platform
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { 
-  Appbar, 
-  Button, 
-  Card, 
-  Dialog, 
-  Portal, 
-  TextInput, 
-  IconButton, 
-  FAB, 
-  Menu,
-  Divider
-} from 'react-native-paper';
+import { Appbar, Button, Card, Dialog, Portal, TextInput, IconButton, FAB } from 'react-native-paper';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useFocusEffect } from '@react-navigation/native';
 import DraggableFlatList from 'react-native-draggable-flatlist';
@@ -43,53 +21,27 @@ const ItineraryScreen = ({ route, navigation }) => {
     description: '',
     location: '',
     startTime: new Date(),
-    endTime: new Date(Date.now() + 3600000)
+    endTime: new Date(Date.now() + 3600000),
   });
   const [userRole, setUserRole] = useState('viewer');
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  
+  const [showTimePicker, setShowTimePicker] = useState({ start: false, end: false });
+
   useEffect(() => {
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        console.log('Invalid start or end date');
-        const today = new Date();
-        setDays([{
-          day: 1,
-          date: today
-        }]);
-        return;
-      }
-      
-      const diffTime = Math.abs(end - start);
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; 
-      
-      const daysList = Array.from({ length: diffDays }, (_, i) => {
-        const day = new Date(start);
-        day.setDate(start.getDate() + i);
-        return {
-          day: i + 1,
-          date: day
-        };
-      });
-      
-      setDays(daysList);
-      if (selectedDay > diffDays) {
-        setSelectedDay(1);
-      }
-    } else {
-      // If no start/end dates, create a default 1-day schedule for today
-      console.log('No start or end date provided, using today');
-      const today = new Date();
-      setDays([{
-        day: 1,
-        date: today
-      }]);
-      setSelectedDay(1);
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const today = new Date();
+    let daysList = [{ day: 1, date: today }];
+
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+      const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+      daysList = Array.from({ length: diffDays }, (_, i) => ({
+        day: i + 1,
+        date: new Date(start.getTime() + i * 24 * 60 * 60 * 1000),
+      }));
     }
+
+    setDays(daysList);
+    if (selectedDay > daysList.length) setSelectedDay(1);
   }, [startDate, endDate]);
 
   useFocusEffect(
@@ -101,143 +53,58 @@ const ItineraryScreen = ({ route, navigation }) => {
   const fetchItinerary = async () => {
     setLoading(true);
     try {
-      console.log('Fetching itinerary for tripId:', tripId);
       const response = await api.getItinerary(tripId);
-      
-      console.log('Itinerary response:', response);
-      
       if (response.success) {
-        console.log('Itinerary fetch successful');
-        
-        // Check data structure and set itinerary items
-        let items = [];
-        if (response.data.data && response.data.data.data) {
-          items = response.data.data.data;
-          console.log('Itinerary items count:', items.length);
-        } else if (response.data.data) {
-          items = response.data.data;
-          console.log('Itinerary items count:', items.length);
-        } else if (Array.isArray(response.data)) {
-          items = response.data;
-          console.log('Itinerary items count (direct array):', items.length);
-        } else {
-          console.log('Unexpected itinerary data structure:', response.data);
-        }
-        
+        const items = Array.isArray(response.data?.data?.data)
+          ? response.data.data.data
+          : Array.isArray(response.data)
+            ? response.data
+            : [];
         setItinerary(items);
-        
-        // Get user role from trip data
-        try {
-          const tripResponse = await api.getTripById(tripId);
-          console.log('Trip response for role check:', tripResponse);
-          
-          if (tripResponse.success) {
-            console.log('Trip data received for role check');
-            
-            // Get user details from AsyncStorage as a fallback
-            const userDetailsStr = await AsyncStorage.getItem('userDetails');
-            const userDetails = userDetailsStr ? JSON.parse(userDetailsStr) : null;
-            console.log('User details from storage:', userDetails);
-            
-            // Check if the response has the right structure
-            if (tripResponse.data && tripResponse.data.data && tripResponse.data.data.participants) {
-              // Try to get the current user from the response or from storage
-              const currentUser = 
-                (tripResponse.data.user || {}).email ? 
-                tripResponse.data.user : 
-                userDetails;
-                
-              if (currentUser && currentUser.email) {
-                console.log('Current user email:', currentUser.email);
-                
-                const userParticipant = tripResponse.data.data.participants.find(
-                  p => p.email === currentUser.email
-                );
-                
-                if (userParticipant) {
-                  console.log('User role found:', userParticipant.role);
-                  setUserRole(userParticipant.role);
-                } else {
-                  console.log('User not found in participants');
-                  setUserRole('viewer'); // Default to viewer role
-                }
-              } else {
-                console.log('No user email found in response or storage');
-                setUserRole('viewer'); // Default to viewer role
-              }
-            } else {
-              console.log('Unexpected trip data structure:', tripResponse.data);
-              setUserRole('viewer'); // Default to viewer role
-            }
-          } else {
-            console.log('Failed to get trip details:', tripResponse.error);
-            setUserRole('viewer'); // Default to viewer role
-          }
-        } catch (tripError) {
-          console.error('Error fetching trip details:', tripError);
-          setUserRole('viewer'); // Default to viewer role
+
+        const userDetails = JSON.parse(await AsyncStorage.getItem('userDetails') || '{}');
+        const tripResponse = await api.getTripById(tripId);
+        if (tripResponse.success && tripResponse.data?.data?.participants && userDetails?.email) {
+          const user = tripResponse.data.data.participants.find(p => p.email === userDetails.email);
+          setUserRole(user?.role || 'viewer');
+        } else {
+          setUserRole('viewer');
         }
       } else {
-        console.error('Itinerary fetch failed:', response.error);
-        Alert.alert(
-          'Error', 
-          response.error,
-          [
-            { 
-              text: 'Retry', 
-              onPress: () => fetchItinerary() 
-            },
-            { text: 'Cancel', style: 'cancel' }
-          ]
-        );
+        Alert.alert('Error', response.error, [{ text: 'Retry', onPress: fetchItinerary }, { text: 'Cancel' }]);
       }
     } catch (error) {
-      console.error('Exception in fetchItinerary:', error);
-      Alert.alert(
-        'Error', 
-        'Failed to fetch itinerary. Please check your connection.',
-        [
-          { 
-            text: 'Retry', 
-            onPress: () => fetchItinerary() 
-          },
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
+      Alert.alert('Error', 'Failed to fetch itinerary.', [{ text: 'Retry', onPress: fetchItinerary }, { text: 'Cancel' }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const showAddDialog = () => {
-    setEditingItem(null);
-    setItemValues({
-      title: '',
-      description: '',
-      location: '',
-      startTime: new Date(),
-      endTime: new Date(Date.now() + 3600000) 
-    });
-    setVisible(true);
-  };
-
-  const showEditDialog = (item) => {
+  const showDialog = (item = null) => {
     setEditingItem(item);
-    setItemValues({
-      title: item.title,
-      description: item.description || '',
-      location: item.location || '',
-      startTime: item.startTime ? new Date(item.startTime) : new Date(),
-      endTime: item.endTime ? new Date(item.endTime) : new Date(Date.now() + 3600000)
-    });
+    setItemValues(
+      item
+        ? {
+            title: item.title || '',
+            description: item.description || '',
+            location: item.location || '',
+            startTime: new Date(item.startTime || Date.now()),
+            endTime: new Date(item.endTime || Date.now() + 3600000),
+          }
+        : {
+            title: '',
+            description: '',
+            location: '',
+            startTime: new Date(),
+            endTime: new Date(Date.now() + 3600000),
+          }
+    );
     setVisible(true);
   };
 
-  const hideDialog = () => {
-    setVisible(false);
-  };
+  const hideDialog = () => setVisible(false);
 
-  const handleAddItem = async () => {
+  const handleSaveItem = async () => {
     if (!itemValues.title) {
       Alert.alert('Error', 'Title is required');
       return;
@@ -245,24 +112,11 @@ const ItineraryScreen = ({ route, navigation }) => {
 
     try {
       setLoading(true);
-      
-      const itemData = {
-        day: selectedDay,
-        title: itemValues.title,
-        description: itemValues.description,
-        location: itemValues.location,
-        startTime: itemValues.startTime,
-        endTime: itemValues.endTime
-      };
-      
-      let response;
-      
-      if (editingItem) {
-        response = await api.updateItineraryItem(tripId, editingItem._id, itemData);
-      } else {
-        response = await api.addItineraryItem(tripId, itemData);
-      }
-      
+      const itemData = { day: selectedDay, ...itemValues };
+      const response = editingItem
+        ? await api.updateItineraryItem(tripId, editingItem._id, itemData)
+        : await api.addItineraryItem(tripId, itemData);
+
       if (response.success) {
         hideDialog();
         fetchItinerary();
@@ -270,57 +124,61 @@ const ItineraryScreen = ({ route, navigation }) => {
         Alert.alert('Error', response.error);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to save itinerary item');
+      Alert.alert('Error', 'Failed to save item');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteItem = async (itemId) => {
-    Alert.alert(
-      'Confirm Deletion',
-      'Are you sure you want to delete this item?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setLoading(true);
-              const response = await api.deleteItineraryItem(tripId, itemId);
-              
-              if (response.success) {
-                fetchItinerary();
-              } else {
-                Alert.alert('Error', response.error);
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete itinerary item');
-            } finally {
-              setLoading(false);
+    Alert.alert('Confirm', 'Delete this item?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setLoading(true);
+            const response = await api.deleteItineraryItem(tripId, itemId);
+            if (response.success) {
+              fetchItinerary();
+            } else {
+              Alert.alert('Error', response.error);
             }
+          } catch (error) {
+            Alert.alert('Error', 'Failed to delete item');
+          } finally {
+            setLoading(false);
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
   };
 
   const handleDragEnd = async ({ data }) => {
     try {
-      const filteredItems = data.filter(item => item.day === selectedDay);
-      setItinerary(prev => {
-        const otherDayItems = prev.filter(item => item.day !== selectedDay);
-        return [...otherDayItems, ...filteredItems];
-      });
-      
-      const reorderItems = filteredItems.map((item, index) => ({
+      const dayItems = data.filter(item => item.day === selectedDay);
+      const reorderedItems = [...dayItems];
+
+      for (let i = 0; i < reorderedItems.length; i++) {
+        const item = reorderedItems[i];
+        const duration = new Date(item.endTime) - new Date(item.startTime);
+        if (i > 0) {
+          const prevEndTime = new Date(reorderedItems[i - 1].endTime);
+          item.startTime = prevEndTime;
+          item.endTime = new Date(prevEndTime.getTime() + duration);
+        }
+      }
+
+      setItinerary(prev => [...prev.filter(item => item.day !== selectedDay), ...reorderedItems]);
+      const itemsForUpdate = reorderedItems.map((item, index) => ({
         id: item._id,
-        order: index
+        order: index,
+        startTime: item.startTime,
+        endTime: item.endTime,
       }));
-      
-      const response = await api.reorderItineraryItems(tripId, selectedDay, reorderItems);
-      
+
+      const response = await api.reorderItineraryItems(tripId, selectedDay, itemsForUpdate);
       if (!response.success) {
         Alert.alert('Error', response.error);
         fetchItinerary();
@@ -332,310 +190,197 @@ const ItineraryScreen = ({ route, navigation }) => {
   };
 
   const formatTime = (date) => {
-    if (!date) return '';
-    
     try {
-      const d = new Date(date);
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (error) {
+      return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
       return '';
     }
   };
 
-  const formatDate = (date) => {
-    if (!date) return '';
-    
-    try {
-      const d = new Date(date);
-      return d.toLocaleDateString(undefined, { 
-        weekday: 'short',
-        month: 'short', 
-        day: 'numeric' 
-      });
-    } catch (error) {
-      return '';
-    }
-  };
+  const renderDayTabs = () => (
+    <View style={styles.dayTabs}>
+      <FlatList
+        horizontal
+        data={days}
+        keyExtractor={item => `day-${item.day}`}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={[styles.dayTab, selectedDay === item.day && styles.selectedDayTab]}
+            onPress={() => setSelectedDay(item.day)}
+          >
+            <Text style={[styles.dayText, selectedDay === item.day && styles.selectedDayText]}>
+              Day {item.day} ({new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})
+            </Text>
+          </TouchableOpacity>
+        )}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.dayTabsContainer}
+      />
+    </View>
+  );
 
-  const renderDayTabs = () => {
-    return (
-      <View style={styles.dayTabsWrapper}>
-        <Text style={styles.dayTabsTitle}>Trip Schedule</Text>
-        <FlatList
-          horizontal
-          data={days}
-          keyExtractor={(item) => `day-${item.day}`}
-          renderItem={({ item }) => {
-            const isSelected = selectedDay === item.day;
-            const dayDate = new Date(item.date);
-            const dayNumber = dayDate.getDate();
-            const month = dayDate.toLocaleString('default', { month: 'short' });
-            
-            return (
-              <TouchableOpacity
-                style={[
-                  styles.dayTab,
-                  isSelected && styles.selectedDayTab
-                ]}
-                onPress={() => setSelectedDay(item.day)}
-              >
-                <View style={styles.dayTabContent}>
-                  <Text style={[styles.dayMonth, isSelected && styles.selectedText]}>{month}</Text>
-                  <Text style={[styles.dayNumber, isSelected && styles.selectedText]}>{dayNumber}</Text>
-                  <Text style={[styles.dayLabel, isSelected && styles.selectedText]}>Day {item.day}</Text>
+  const renderItem = useCallback(
+    ({ item, drag, isActive }) => {
+      if (item.day !== selectedDay) return null;
+      return (
+        <Card style={[styles.itemCard, isActive && styles.draggingItem]} elevation={3}>
+          <Card.Content>
+            <View style={styles.itemHeader}>
+              <Text style={styles.itemTime}>
+                {formatTime(item.startTime)} - {formatTime(item.endTime)}
+              </Text>
+              {(userRole === 'admin' || userRole === 'editor') && (
+                <View style={styles.itemActions}>
+                  <IconButton icon="pencil" size={20} iconColor="#6200ee" onPress={() => showDialog(item)} />
+                  <IconButton icon="delete" size={20} iconColor="#f44336" onPress={() => handleDeleteItem(item._id)} />
+                  <IconButton icon="drag" size={20} iconColor="#757575" onLongPress={drag} />
                 </View>
-              </TouchableOpacity>
-            );
-          }}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.dayTabsContainer}
-        />
-      </View>
-    );
-  };
-
-  const renderItem = useCallback(({ item, drag, isActive }) => {
-    if (item.day !== selectedDay) return null;
-    
-    return (
-      <Card
-        style={[
-          styles.itemCard,
-          isActive && styles.draggingItem
-        ]}
-      >
-        <Card.Content>
-          <View style={styles.itemHeader}>
-            <View style={styles.timeLocationContainer}>
-              <View style={styles.timeContainer}>
-                <IconButton
-                  icon="clock-outline"
-                  size={20}
-                  style={styles.timeIcon}
-                  color="#6200ee"
-                />
-                <Text style={styles.itemTime}>
-                  {formatTime(item.startTime)} - {formatTime(item.endTime)}
-                </Text>
-              </View>
+              )}
             </View>
-            
-            {(userRole === 'admin' || userRole === 'editor') && (
-              <View style={styles.itemActions}>
-                <IconButton
-                  icon="pencil"
-                  size={20}
-                  color="#6200ee"
-                  onPress={() => showEditDialog(item)}
-                />
-                <IconButton
-                  icon="delete"
-                  size={20}
-                  color="#f44336"
-                  onPress={() => handleDeleteItem(item._id)}
-                />
-                <IconButton
-                  icon="drag"
-                  size={20}
-                  color="#757575"
-                  onLongPress={drag}
-                />
+            <Text style={styles.itemTitle}>{item.title}</Text>
+            {item.description && <Text style={styles.itemDescription}>{item.description}</Text>}
+            {item.location && (
+              <View style={styles.locationContainer}>
+                <Text style={styles.itemLocation}>📍 {item.location}</Text>
               </View>
             )}
-          </View>
-          
-          <View style={styles.contentContainer}>
-            <Text style={styles.itemTitle}>{item.title}</Text>
-            
-            {item.description ? (
-              <Text style={styles.itemDescription}>{item.description}</Text>
-            ) : null}
-            
-            {item.location ? (
-              <View style={styles.locationContainer}>
-                <IconButton icon="map-marker" size={20} style={styles.locationIcon} color="#f44336" />
-                <Text style={styles.itemLocation}>{item.location}</Text>
-              </View>
-            ) : null}
-          </View>
-        </Card.Content>
-      </Card>
-    );
-  }, [selectedDay, userRole]);
-
-  const debugItinerary = async () => {
-    try {
-      console.log('Running itinerary debug for trip:', tripId);
-      const response = await api.debugItinerary(tripId);
-      if (response.success) {
-        console.log('Debug successful:', response.data);
-        Alert.alert(
-          'Debug Info', 
-          `Trip: ${response.data.tripName}\nParticipants: ${response.data.participantsCount}\nItinerary Items: ${response.data.itineraryCount}\nUser is participant: ${response.data.isUserParticipant}\nStart Date: ${response.data.startDate}\nEnd Date: ${response.data.endDate}`
-        );
-      } else {
-        console.log('Debug failed:', response.error);
-        Alert.alert('Debug Failed', response.error);
-      }
-    } catch (error) {
-      console.error('Debug error:', error);
-      Alert.alert('Debug Error', error.message);
-    }
-  };
+          </Card.Content>
+        </Card>
+      );
+    },
+    [selectedDay, userRole]
+  );
 
   return (
     <SafeAreaView style={styles.container}>
-      <Appbar.Header style={styles.appbarHeader}>
+      <Appbar.Header style={styles.appbar}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color="#fff" />
-        <Appbar.Content title={`${tripName} Itinerary`} titleStyle={styles.headerTitle} />
+        <Appbar.Content title={`${tripName} Itinerary`} titleStyle={styles.appbarTitle} />
         {(userRole === 'admin' || userRole === 'editor') && (
           <Appbar.Action icon="refresh" onPress={fetchItinerary} color="#fff" />
         )}
-        <Appbar.Action icon="bug" onPress={debugItinerary} color="#fff" />
       </Appbar.Header>
 
-      {loading && (
-        <View style={styles.loadingContainer}>
+      {loading ? (
+        <View style={styles.loading}>
           <ActivityIndicator size="large" color="#6200ee" />
-          <Text style={styles.loadingText}>Loading itinerary...</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
-      )}
-
-      {!loading && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.container}
-        >
+      ) : (
+        <View style={styles.content}>
           {days.length > 0 ? (
             <>
               {renderDayTabs()}
-              
-              <View style={styles.itineraryContainer}>
-                {itinerary.filter(item => item.day === selectedDay).length === 0 ? (
-                  <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>No activities planned for this day</Text>
+              <DraggableFlatList
+                data={itinerary}
+                onDragEnd={handleDragEnd}
+                keyExtractor={item => item._id}
+                renderItem={renderItem}
+                contentContainerStyle={styles.listContainer}
+                ListEmptyComponent={
+                  <View style={styles.empty}>
+                    <Text style={styles.emptyText}>No activities for this day</Text>
                     {(userRole === 'admin' || userRole === 'editor') && (
-                      <Button 
-                        mode="contained" 
-                        icon="plus" 
-                        onPress={showAddDialog}
-                        style={styles.addActivityButton}
+                      <Button
+                        mode="contained"
+                        icon="plus"
+                        onPress={() => showDialog()}
+                        style={styles.addButton}
+                        contentStyle={styles.addButtonContent}
                       >
                         Add Activity
                       </Button>
                     )}
                   </View>
-                ) : (
-                  <DraggableFlatList
-                    data={itinerary}
-                    onDragEnd={handleDragEnd}
-                    keyExtractor={(item) => item._id}
-                    renderItem={renderItem}
-                    contentContainerStyle={styles.listContainer}
-                    ListFooterComponent={() => (
-                      <View style={styles.listFooter}>
-                        <Text style={styles.footerText}>
-                          {userRole === 'admin' || userRole === 'editor' 
-                            ? 'Drag items to reorder your activities.' 
-                            : 'Contact the trip organizer to make changes.'}
-                        </Text>
-                      </View>
-                    )}
-                  />
-                )}
-              </View>
+                }
+              />
             </>
           ) : (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                Trip dates not set. Please set trip start and end dates to plan your itinerary.
-              </Text>
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>Please set trip dates to plan itinerary.</Text>
             </View>
           )}
-
-          {(userRole === 'admin' || userRole === 'editor') && itinerary.filter(item => item.day === selectedDay).length > 0 && (
-            <FAB
-              style={styles.fab}
-              icon="plus"
-              onPress={showAddDialog}
-              color="#fff"
-            />
+          {(userRole === 'admin' || userRole === 'editor') && (
+            <FAB style={styles.fab} icon="plus" onPress={() => showDialog()} color="#fff" />
           )}
-        </KeyboardAvoidingView>
+        </View>
       )}
 
       <Portal>
-        <Dialog visible={visible} onDismiss={hideDialog}>
-          <Dialog.Title>{editingItem ? 'Edit Activity' : 'Add Activity'}</Dialog.Title>
+        <Dialog visible={visible} onDismiss={hideDialog} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>
+            {editingItem ? 'Edit Activity' : 'Add Activity'}
+          </Dialog.Title>
           <Dialog.Content>
             <TextInput
               label="Title"
               value={itemValues.title}
-              onChangeText={(text) => setItemValues({...itemValues, title: text})}
+              onChangeText={text => setItemValues({ ...itemValues, title: text })}
               style={styles.input}
+              theme={{ colors: { primary: '#6200ee' } }}
             />
             <TextInput
               label="Description"
               value={itemValues.description}
-              onChangeText={(text) => setItemValues({...itemValues, description: text})}
+              onChangeText={text => setItemValues({ ...itemValues, description: text })}
               multiline
-              numberOfLines={2}
               style={styles.input}
+              theme={{ colors: { primary: '#6200ee' } }}
             />
             <TextInput
               label="Location"
               value={itemValues.location}
-              onChangeText={(text) => setItemValues({...itemValues, location: text})}
+              onChangeText={text => setItemValues({ ...itemValues, location: text })}
               style={styles.input}
+              theme={{ colors: { primary: '#6200ee' } }}
             />
-            
             <TouchableOpacity
-              onPress={() => setShowStartDatePicker(true)}
+              onPress={() => setShowTimePicker({ ...showTimePicker, start: true })}
               style={styles.timeInput}
             >
-              <Text style={styles.timeInputLabel}>Start Time</Text>
-              <Text>{formatTime(itemValues.startTime)}</Text>
+              <Text style={styles.timeInputText}>Start: {formatTime(itemValues.startTime)}</Text>
             </TouchableOpacity>
-            
-            {showStartDatePicker && (
+            {showTimePicker.start && (
               <DateTimePicker
                 value={itemValues.startTime}
                 mode="time"
-                display="default"
-                onChange={(event, selectedDate) => {
-                  setShowStartDatePicker(false);
-                  if (selectedDate) {
-                    setItemValues({...itemValues, startTime: selectedDate});
-                  }
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, date) => {
+                  setShowTimePicker({ ...showTimePicker, start: false });
+                  if (date) setItemValues({ ...itemValues, startTime: date });
                 }}
               />
             )}
-            
             <TouchableOpacity
-              onPress={() => setShowEndDatePicker(true)}
+              onPress={() => setShowTimePicker({ ...showTimePicker, end: true })}
               style={styles.timeInput}
             >
-              <Text style={styles.timeInputLabel}>End Time</Text>
-              <Text>{formatTime(itemValues.endTime)}</Text>
+              <Text style={styles.timeInputText}>End: {formatTime(itemValues.endTime)}</Text>
             </TouchableOpacity>
-            
-            {showEndDatePicker && (
+            {showTimePicker.end && (
               <DateTimePicker
                 value={itemValues.endTime}
                 mode="time"
-                display="default"
-                onChange={(event, selectedDate) => {
-                  setShowEndDatePicker(false);
-                  if (selectedDate) {
-                    setItemValues({...itemValues, endTime: selectedDate});
-                  }
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(event, date) => {
+                  setShowTimePicker({ ...showTimePicker, end: false });
+                  if (date) setItemValues({ ...itemValues, endTime: date });
                 }}
               />
             )}
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={hideDialog}>Cancel</Button>
-            <Button onPress={handleAddItem} mode="contained">{editingItem ? 'Update' : 'Add'}</Button>
+            <Button onPress={hideDialog} textColor="#757575">
+              Cancel
+            </Button>
+            <Button
+              onPress={handleSaveItem}
+              mode="contained"
+              style={styles.dialogButton}
+              contentStyle={styles.dialogButtonContent}
+            >
+              {editingItem ? 'Update' : 'Add'}
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -646,201 +391,173 @@ const ItineraryScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5'
+    backgroundColor: '#f8fafc',
   },
-  appbarHeader: {
+  appbar: {
+    paddingTop: 10,
+    marginTop: 0,
     backgroundColor: '#6200ee',
+    elevation: 4,
   },
-  headerTitle: {
+  appbarTitle: {
     color: '#fff',
-    fontWeight: 'bold'
+    fontSize: 20,
+    fontWeight: '600',
   },
-  loadingContainer: {
+  content: {
+    flex: 1,
+  },
+  loading: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
   },
   loadingText: {
     marginTop: 10,
-    color: '#6200ee',
-    fontSize: 16
+    fontSize: 16,
+    color: '#333',
   },
-  dayTabsWrapper: {
-    padding: 15,
-    backgroundColor: '#fff', 
-    marginBottom: 10,
-    elevation: 2
-  },
-  dayTabsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#333'
+  dayTabs: {
+    backgroundColor: '#fff',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   dayTabsContainer: {
-    paddingVertical: 5
+    paddingHorizontal: 16,
   },
   dayTab: {
-    padding: 12,
-    marginRight: 10,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    minWidth: 70,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginRight: 8,
+    borderRadius: 20,
+    backgroundColor: '#f1f3f5',
   },
   selectedDayTab: {
-    backgroundColor: '#e1d7fc',
-    borderColor: '#6200ee',
-    borderWidth: 1
+    backgroundColor: '#6200ee',
   },
-  dayTabContent: {
-    alignItems: 'center'
+  dayText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
   },
-  dayMonth: {
-    fontSize: 12,
-    color: '#666'
-  },
-  dayNumber: {
-    fontWeight: 'bold',
-    fontSize: 20,
-    marginVertical: 2,
-    color: '#333'
-  },
-  dayLabel: {
-    fontSize: 12,
-    color: '#666'
-  },
-  selectedText: {
-    color: '#6200ee'
-  },
-  itineraryContainer: {
-    flex: 1,
-    padding: 10
+  selectedDayText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   listContainer: {
-    paddingBottom: 80
+    padding: 16,
+    paddingBottom: 80,
   },
   itemCard: {
     marginBottom: 12,
-    elevation: 2,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#fff',
-    borderLeftWidth: 4,
-    borderLeftColor: '#6200ee'
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   draggingItem: {
-    opacity: 0.7,
-    transform: [{ scale: 1.05 }],
-    elevation: 5
+    opacity: 0.9,
+    shadowOpacity: 0.3,
   },
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 5
-  },
-  timeLocationContainer: {
-    flex: 1
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 10
-  },
-  timeIcon: {
-    margin: 0,
-    padding: 0
+    marginBottom: 8,
   },
   itemTime: {
     fontSize: 14,
-    color: '#666',
-    fontWeight: 'bold'
+    fontWeight: '500',
+    color: '#6200ee',
+  },
+  itemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  itemTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  itemDescription: {
+    fontSize: 14,
+    color: '#4b5563',
+    marginBottom: 4,
   },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 5
-  },
-  locationIcon: {
-    margin: 0,
-    padding: 0
   },
   itemLocation: {
     fontSize: 14,
-    color: '#555'
+    color: '#f44336',
   },
-  itemActions: {
-    flexDirection: 'row'
-  },
-  contentContainer: {
-    marginLeft: 10
-  },
-  itemTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 5,
-    color: '#333'
-  },
-  itemDescription: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 5
-  },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#6200ee'
-  },
-  input: {
-    marginBottom: 10
-  },
-  timeInput: {
-    marginVertical: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5
-  },
-  timeInputLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 5
-  },
-  emptyContainer: {
+  empty: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20
+    padding: 20,
   },
   emptyText: {
     fontSize: 16,
-    color: '#888',
+    color: '#4b5563',
     textAlign: 'center',
-    marginBottom: 20
+    marginBottom: 16,
   },
-  addActivityButton: {
-    marginTop: 15,
+  addButton: {
+    borderRadius: 8,
     backgroundColor: '#6200ee',
-    paddingHorizontal: 20
   },
-  listFooter: {
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 80
+  addButtonContent: {
+    paddingHorizontal: 16,
+    height: 48,
   },
-  footerText: {
-    fontSize: 14,
-    color: '#888',
-    fontStyle: 'italic'
-  }
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    backgroundColor: '#6200ee',
+    elevation: 6,
+  },
+  dialog: {
+    borderRadius: 12,
+    backgroundColor: '#fff',
+  },
+  dialogTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  input: {
+    marginBottom: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+  },
+  timeInput: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: '#f8fafc',
+  },
+  timeInputText: {
+    fontSize: 16,
+    color: '#1a1a1a',
+  },
+  dialogButton: {
+    borderRadius: 8,
+    backgroundColor: '#6200ee',
+  },
+  dialogButtonContent: {
+    paddingHorizontal: 16,
+    height: 48,
+  },
 });
 
-export default ItineraryScreen; 
+export default ItineraryScreen;

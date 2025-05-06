@@ -16,7 +16,10 @@ import InviteParticipantsScreen from './src/screen/InviteParticipantsScreen';
 import InvitationHandlerScreen from './src/screen/InvitationHandlerScreen';
 import ItineraryScreen from './src/screen/ItineraryScreen';
 import ChatScreen from './src/screen/ChatScreen';
+import BillingScreen from './src/screen/BillingScreen';
 import DashboardScreen from './src/screen/DashboardScreen';
+import ImageViewerScreen from './src/screen/ImageViewerScreen';
+import LocationViewerScreen from './src/screen/LocationViewerScreen';
 
 import CustomDrawerContent from './src/components/CustomDrawerContent';
 
@@ -57,6 +60,9 @@ const TripsStack = () => {
       <Stack.Screen name="InviteParticipants" component={InviteParticipantsScreen} />
       <Stack.Screen name="Itinerary" component={ItineraryScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
+      <Stack.Screen name="Billing" component={BillingScreen} />
+      <Stack.Screen name="ImageViewer" component={ImageViewerScreen} />
+      <Stack.Screen name="LocationViewer" component={LocationViewerScreen} />
     </Stack.Navigator>
   );
 };

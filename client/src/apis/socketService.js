@@ -7,10 +7,19 @@ class SocketService {
     this.socket = null;
     this.isConnected = false;
     this.listeners = {};
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 10;
+    this.reconnectInterval = 2000; // Start with 2 seconds
   }
 
   async connect() {
     try {
+      // If already connected, return 
+      if (this.isConnected && this.socket) {
+        console.log('Socket already connected, reusing connection');
+        return true;
+      }
+      
       // Get the auth token
       const token = await AsyncStorage.getItem('token');
       if (!token) {
@@ -18,23 +27,51 @@ class SocketService {
         return false;
       }
 
-      // Create socket connection
+      console.log('Attempting to connect to socket server:', endpoint);
+      
+      // Create socket connection with better error handling
       this.socket = io(endpoint, {
         auth: {
           token
         },
-        transports: ['websocket'],
+        transports: ['websocket', 'polling'], // Try websocket first, fall back to polling
         reconnection: true,
-        reconnectionDelay: 500,
-        reconnectionAttempts: Infinity
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        timeout: 10000, // 10 second connection timeout
+        forceNew: true // Force a new connection
       });
 
       // Set up event listeners
       this.socket.on('connect', this._handleConnect.bind(this));
       this.socket.on('disconnect', this._handleDisconnect.bind(this));
       this.socket.on('error', this._handleError.bind(this));
-
-      return true;
+      this.socket.on('connect_error', this._handleConnectError.bind(this));
+      this.socket.on('reconnect_attempt', this._handleReconnectAttempt.bind(this));
+      this.socket.on('reconnect', this._handleReconnect.bind(this));
+      
+      // Wait for connection or timeout
+      return new Promise((resolve) => {
+        // Set a timeout for connection
+        const timeout = setTimeout(() => {
+          console.log('Socket connection timeout');
+          this.socket.close();
+          resolve(false);
+        }, 10000);
+        
+        // Connection successful
+        this.socket.once('connect', () => {
+          clearTimeout(timeout);
+          resolve(true);
+        });
+        
+        // Connection error
+        this.socket.once('connect_error', (err) => {
+          console.error('Socket connection error:', err);
+          clearTimeout(timeout);
+          resolve(false);
+        });
+      });
     } catch (error) {
       console.error('Socket connection error:', error);
       return false;
@@ -43,6 +80,7 @@ class SocketService {
 
   disconnect() {
     if (this.socket) {
+      console.log('Disconnecting socket');
       this.socket.disconnect();
       this.socket = null;
       this.isConnected = false;
@@ -52,19 +90,46 @@ class SocketService {
   // Join a trip's chat room
   joinTrip(tripId) {
     if (this.isConnected && this.socket) {
+      console.log(`Joining trip ${tripId} chat room`);
       this.socket.emit('join-trip', tripId);
+    } else {
+      console.warn('Cannot join trip, socket not connected');
+      // Try to reconnect
+      this.connect().then(connected => {
+        if (connected) {
+          this.socket.emit('join-trip', tripId);
+        }
+      });
     }
   }
 
   // Send a message
   sendMessage(tripId, content, type = 'text', mediaUrl = null, location = null) {
     if (this.isConnected && this.socket) {
+      console.log('Emitting message via socket:', { tripId, content, type });
       this.socket.emit('send-message', {
         tripId,
         content,
         type,
         mediaUrl,
         location
+      });
+      return true;
+    } else {
+      console.log('Socket not connected, cannot send message');
+      // Try to reconnect and send
+      this.connect().then(connected => {
+        if (connected) {
+          this.socket.emit('send-message', {
+            tripId,
+            content,
+            type,
+            mediaUrl,
+            location
+          });
+          return true;
+        }
+        return false;
       });
     }
   }
@@ -117,8 +182,9 @@ class SocketService {
 
   // Private methods
   _handleConnect() {
-    console.log('Socket connected');
+    console.log('Socket connected successfully');
     this.isConnected = true;
+    this.reconnectAttempts = 0;
   }
 
   _handleDisconnect() {
@@ -128,6 +194,19 @@ class SocketService {
 
   _handleError(error) {
     console.error('Socket error:', error);
+  }
+  
+  _handleConnectError(error) {
+    console.error('Socket connect_error:', error);
+  }
+  
+  _handleReconnectAttempt(attempt) {
+    console.log(`Socket reconnection attempt ${attempt}`);
+  }
+  
+  _handleReconnect(attempt) {
+    console.log(`Socket reconnected after ${attempt} attempts`);
+    this.isConnected = true;
   }
 }
 

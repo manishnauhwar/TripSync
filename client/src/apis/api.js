@@ -30,6 +30,34 @@ const createAuthenticatedRequest = async () => {
   }
 };
 
+// Helper to create form data request
+const createFormDataRequest = async () => {
+  try {
+    const token = await AsyncStorage.getItem('token');
+    console.log('Creating form data request with token:', token ? 'Present' : 'Missing');
+    
+    return axios.create({
+      baseURL: API_URL,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Accept': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      timeout: 30000, // 30 second timeout for uploads
+    });
+  } catch (error) {
+    console.error('Error creating form data request:', error);
+    return axios.create({
+      baseURL: API_URL,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Accept': 'application/json',
+      },
+      timeout: 30000, // 30 second timeout for uploads
+    });
+  }
+};
+
 const api = {
   register: async (username, email, password, fullName, confirmPassword) => {
     try {
@@ -303,6 +331,7 @@ const api = {
   reorderItineraryItems: async (tripId, day, items) => {
     try {
       console.log('Reordering itinerary items for day:', day);
+      console.log('Items to reorder with times:', items);
       const instance = await createAuthenticatedRequest();
       const endpoint = `/api/trips/${tripId}/itinerary-reorder`;
       
@@ -327,6 +356,62 @@ const api = {
       return { 
         success: false, 
         error: error?.response?.data?.message || 'Failed to fetch messages' 
+      };
+    }
+  },
+
+  uploadMedia: async (formData) => {
+    try {
+      console.log('============ MEDIA UPLOAD START ============');
+      
+      // Get token for authentication
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.log('Warning: No authentication token found');
+      }
+      
+      // Create simple axios instance for upload
+      const instance = axios.create({
+        baseURL: API_URL,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        timeout: 60000, // 60 seconds timeout for large files
+      });
+      
+      console.log('Sending upload request to:', `${API_URL}/api/chat/upload`);
+      const response = await instance.post('/api/chat/upload', formData);
+      
+      console.log('Upload response status:', response.status);
+      console.log('Upload response data:', response.data);
+      console.log('============ MEDIA UPLOAD SUCCESS ============');
+      
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.log('============ MEDIA UPLOAD ERROR ============');
+      console.log('Error type:', error.name);
+      console.log('Error message:', error.message);
+      
+      if (error.response) {
+        // Server responded with error
+        console.log('Server responded with status:', error.response.status);
+        console.log('Response data:', error.response.data);
+      } else if (error.request) {
+        // Request was made but no response
+        console.log('No response received from server');
+        console.log('Request details:', error.request);
+      } else {
+        // Error in setting up request
+        console.log('Error setting up request:', error.message);
+      }
+      
+      console.log('============ MEDIA UPLOAD ERROR END ============');
+      
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || error.message || 'Upload failed'
       };
     }
   },
@@ -390,7 +475,91 @@ const api = {
         error: error?.response?.data?.message || 'Debug request failed.' 
       };
     }
-  }
+  },
+
+  getTripExpenses: async (tripId) => {
+    try {
+      console.log('Fetching expenses for trip:', tripId);
+      const instance = await createAuthenticatedRequest();
+      const response = await instance.get(`/api/trips/${tripId}/expenses`);
+      
+      console.log('Expenses API response status:', response.status);
+      console.log('Raw expenses data:', response.data);
+      
+      // Make sure we're returning an array, even if the response structure is unexpected
+      let expensesData = [];
+      
+      if (response.data && Array.isArray(response.data)) {
+        // If response.data is already an array, use it
+        expensesData = response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        // If response.data.data is an array (common API pattern), use that
+        expensesData = response.data.data;
+      } else if (response.data) {
+        // Last resort: try to parse the data or return an empty array
+        console.log('Unexpected expenses data structure:', response.data);
+        expensesData = [];
+      }
+      
+      console.log('Processed expenses data (count):', expensesData.length);
+      return { success: true, data: expensesData };
+    } catch (error) {
+      console.log('Get expenses error:', error?.response?.data?.message || error.message);
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || 'Failed to fetch expenses' 
+      };
+    }
+  },
+  
+  addTripExpense: async (tripId, expenseData) => {
+    try {
+      const instance = await createAuthenticatedRequest();
+      const response = await instance.post(`/api/trips/${tripId}/expenses`, expenseData);
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.log('Add expense error:', error?.response?.data?.message || error.message);
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || 'Failed to add expense' 
+      };
+    }
+  },
+
+  exportTripExpensesPdf: async (tripId) => {
+    try {
+      console.log('Requesting PDF export from server for trip:', tripId);
+      const instance = await createAuthenticatedRequest();
+      
+      // Request the API but don't expect a direct file download since we're on React Native
+      const response = await instance.get(`/api/trips/${tripId}/expenses/export-pdf`);
+      
+      // The server should return a URL to the generated PDF that we can download or view
+      console.log('Export PDF response:', response.data);
+      
+      if (response.data && response.data.pdfUrl) {
+        return { 
+          success: true, 
+          data: { 
+            url: response.data.pdfUrl,
+            message: 'PDF generated successfully'
+          } 
+        };
+      } else {
+        // If there's no URL, the server processed the request but didn't provide a download link
+        return { 
+          success: false, 
+          error: 'Server generated PDF but did not provide a download URL' 
+        };
+      }
+    } catch (error) {
+      console.log('Export PDF error:', error?.response?.data?.message || error.message);
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || 'Failed to export expenses as PDF' 
+      };
+    }
+  },
 };
 
 export default api;

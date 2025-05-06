@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
   FlatList,
   Alert
@@ -214,10 +214,6 @@ const TripDetailsScreen = ({ route, navigation }) => {
                 }
               >
                 <Menu.Item 
-                  onPress={() => changeParticipantRole(item._id, 'admin')} 
-                  title="Admin" 
-                />
-                <Menu.Item 
                   onPress={() => changeParticipantRole(item._id, 'editor')} 
                   title="Editor" 
                 />
@@ -321,6 +317,19 @@ const TripDetailsScreen = ({ route, navigation }) => {
             >
               Chat
             </Button>
+
+            <Button 
+              mode="contained" 
+              icon="cash-multiple" 
+              style={styles.actionButton}
+              onPress={() => navigation.navigate('Billing', { 
+                tripId: trip._id,
+                tripName: trip.name,
+                participants: trip.participants.filter(p => p.status === 'accepted')
+              })}
+            >
+              Billing
+            </Button>
           </View>
           
           {/* Trip Details Card */}
@@ -355,15 +364,13 @@ const TripDetailsScreen = ({ route, navigation }) => {
             <Card.Content>
               <View style={styles.participantsHeader}>
                 <Text style={styles.sectionTitle}>Participants</Text>
-                {userRole === 'admin' && (
-                  <Button 
-                    mode="outlined" 
-                    onPress={handleInviteParticipants}
-                    style={styles.inviteButton}
-                  >
-                    Invite
-                  </Button>
-                )}
+                <Button 
+                  mode="outlined" 
+                  onPress={handleInviteParticipants}
+                  style={styles.inviteButton}
+                >
+                  Invite
+                </Button>
               </View>
               
               {trip.participants.filter(p => p.status === 'accepted').length === 0 ? (
@@ -401,10 +408,6 @@ const TripDetailsScreen = ({ route, navigation }) => {
                         }
                       >
                         <Menu.Item 
-                          title="Admin"
-                          onPress={() => changeParticipantRole(participant._id, 'admin')}
-                        />
-                        <Menu.Item 
                           title="Editor"
                           onPress={() => changeParticipantRole(participant._id, 'editor')}
                         />
@@ -421,7 +424,7 @@ const TripDetailsScreen = ({ route, navigation }) => {
           </Card>
           
           {/* Pending Invitations Section */}
-          {userRole === 'admin' && trip.participants.filter(p => p.status === 'invited').length > 0 && (
+          {trip.participants.filter(p => p.status === 'invited').length > 0 && (
             <Card style={styles.card}>
               <Card.Content>
                 <Text style={styles.sectionTitle}>Pending Invitations</Text>

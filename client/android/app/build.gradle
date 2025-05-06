@@ -113,11 +113,22 @@ dependencies {
     implementation("com.facebook.react:react-android")
     implementation platform('com.google.firebase:firebase-bom:33.13.0')
     implementation 'com.google.firebase:firebase-analytics'
-    implementation 'com.google.firebase:firebase-auth'  
+    implementation 'com.google.firebase:firebase-auth'
+      
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
     }
+    implementation(project(':react-native-onesignal')){
+      exclude group: 'com.google.android.gms'
+  }
+
+  implementation(project(':react-native-maps')){
+      exclude group: 'com.google.android.gms'
+  }
+  implementation 'com.google.android.gms:play-services-base:18.0.1'
+  implementation 'com.google.android.gms:play-services-location:19.0.1'
+  implementation 'com.google.android.gms:play-services-maps:18.0.2'
 }
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")

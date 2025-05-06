@@ -106,12 +106,21 @@ export const inviteToTrip = async (req, res) => {
       p => p.user && p.user.toString() === userId.toString()
     );
 
-    if (!userParticipant || userParticipant.role !== 'admin') {
-      console.log('User is not admin:', { userRole: userParticipant?.role });
+    if (!userParticipant) {
+      console.log('User is not a participant of this trip');
       return res.status(403).json({
         success: false,
-        message: 'Only admins can invite participants'
+        message: 'You must be a participant of this trip to invite others'
       });
+    }
+
+    let assignedRole = 'viewer'; 
+    if (userParticipant.role === 'admin' && role) {
+      if (role === 'editor' || role === 'viewer') {
+        assignedRole = role;
+      } else {
+        console.log('Invalid role requested:', role);
+      }
     }
 
     const existingParticipant = trip.participants.find(p => p.email === email);
@@ -128,7 +137,7 @@ export const inviteToTrip = async (req, res) => {
     
     const newParticipant = {
       email,
-      role: role || 'viewer',
+      role: assignedRole,
       status: 'invited'
     };
     
@@ -153,7 +162,7 @@ export const inviteToTrip = async (req, res) => {
       trip.name,
       inviterName,
       tripId,
-      role || 'viewer'
+      assignedRole
     );
 
     if (!emailResult.success) {
@@ -208,6 +217,14 @@ export const updateParticipantRole = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Participant not found'
+      });
+    }
+
+    // Validate the new role
+    if (newRole !== 'editor' && newRole !== 'viewer') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified. Role must be either "editor" or "viewer"'
       });
     }
 

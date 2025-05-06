@@ -1,15 +1,39 @@
-import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { Card, Button } from 'react-native-paper';
 import React, { useState, useEffect } from 'react';
 import api from '../apis/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ReactNativeBiometrics from 'react-native-biometrics';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const LoginScreen = ({ navigation }) => {
     const [usernameOrEmail, setUsernameOrEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [isBiometricsAvailable, setIsBiometricsAvailable] = useState(false);
 
+    useEffect(() => {
+        checkBiometricAvailability();
+        checkSavedCredentials();
+    }, []);
+
+    const checkBiometricAvailability = async () => {
+        const rnBiometrics = new ReactNativeBiometrics();
+        const { available, biometryType } = await rnBiometrics.isSensorAvailable();
+        setIsBiometricsAvailable(available && biometryType === 'Fingerprint');
+    };
+
+    const checkSavedCredentials = async () => {
+        try {
+            const savedUsername = await AsyncStorage.getItem('savedUsername');
+            if (savedUsername) {
+                setUsernameOrEmail(savedUsername);
+            }
+        } catch (error) {
+            console.log('Error retrieving saved credentials:', error);
+        }
+    };
 
     const validateInputs = () => {
         if (!usernameOrEmail || !password) {
@@ -32,6 +56,7 @@ const LoginScreen = ({ navigation }) => {
                 const userData = response.data.user;
                 await AsyncStorage.setItem('userDetails', JSON.stringify(userData));
                 await AsyncStorage.setItem('token', response.data.token);
+                await AsyncStorage.setItem('savedUsername', formattedUsernameOrEmail);
                 
                 Alert.alert('Success', 'Login successful!');
             } else {
@@ -40,6 +65,48 @@ const LoginScreen = ({ navigation }) => {
         } catch (error) {
             console.log('Login error:', error);
             setError('An error occurred during login. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleBiometricLogin = async () => {
+        try {
+            const rnBiometrics = new ReactNativeBiometrics();
+            const { available } = await rnBiometrics.isSensorAvailable();
+            
+            if (!available) {
+                Alert.alert('Error', 'Fingerprint sensor is not available on this device');
+                return;
+            }
+            const savedUsername = await AsyncStorage.getItem('savedUsername');
+            if (!savedUsername) {
+                Alert.alert('Notice', 'Please login with username and password first to enable fingerprint login');
+                return;
+            }
+
+            setLoading(true);
+
+            const { success } = await rnBiometrics.simplePrompt({ 
+                promptMessage: 'Authenticate with fingerprint' 
+            });
+
+            if (success) {
+                const token = await AsyncStorage.getItem('token');
+                const userDetails = await AsyncStorage.getItem('userDetails');
+                
+                if (token && userDetails) {
+                    setUsernameOrEmail(savedUsername);
+                    Alert.alert('Success', 'Biometric authentication successful!');
+                } else {
+                    Alert.alert('Session Expired', 'Please login with your credentials again');
+                }
+            } else {
+                setError('Biometric authentication failed');
+            }
+        } catch (error) {
+            console.log('Biometric login error:', error);
+            setError('Biometric authentication failed');
         } finally {
             setLoading(false);
         }
@@ -79,6 +146,18 @@ const LoginScreen = ({ navigation }) => {
                         >
                             LOGIN
                         </Button>
+                        
+                        {isBiometricsAvailable && (
+                            <TouchableOpacity 
+                                style={styles.biometricButton} 
+                                onPress={handleBiometricLogin}
+                                disabled={loading}
+                            >
+                                <Icon name="fingerprint" size={28} color="#6200ea" />
+                                <Text style={styles.biometricText}>Login with Fingerprint</Text>
+                            </TouchableOpacity>
+                        )}
+                        
                         <Button
                             mode="text"
                             onPress={() => navigation.navigate('Register')}
@@ -150,6 +229,21 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: '#fff',
+    },
+    biometricButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 15,
+        padding: 10,
+        borderRadius: 8,
+        backgroundColor: '#f0e7ff',
+    },
+    biometricText: {
+        marginLeft: 10,
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#6200ea',
     },
     linkButton: {
         marginTop: 15,

@@ -1,5 +1,16 @@
 import Message from '../models/messageModel.js';
 import Trip from '../models/tripModel.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 export const getMessages = async (req, res) => {
   try {
@@ -117,6 +128,56 @@ export const markMessagesAsRead = async (req, res) => {
     res.status(400).json({
       success: false,
       message: error.message
+    });
+  }
+};
+export const uploadFile = async (req, res) => {
+  try {
+    console.log('Upload request received');
+    if (!req.file) {
+      console.log('Error: No file in upload request');
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+    
+    // Log file details
+    console.log('File details:', {
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      savedAs: req.file.filename
+    });
+    
+    // Create file URLs - both the API path and direct path
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    
+    // API path (through /api/chat/uploads) - may need authentication
+    const apiFileUrl = `${baseUrl}/api/chat/uploads/${req.file.filename}`;
+    
+    // Direct path (through /uploads) - public access without authentication
+    const publicFileUrl = `${baseUrl}/uploads/${req.file.filename}`;
+    
+    console.log('Generated file URLs:', {
+      apiPath: apiFileUrl,
+      publicPath: publicFileUrl
+    });
+    
+    // Return success response with both URLs
+    res.status(200).json({
+      success: true,
+      fileUrl: publicFileUrl, 
+      apiFileUrl: apiFileUrl,  
+      fileName: req.file.originalname,
+      filePath: req.file.path,
+      fileSize: req.file.size
+    });
+  } catch (error) {
+    console.error('File upload error:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'File upload failed'
     });
   }
 }; 
