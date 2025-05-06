@@ -1,0 +1,4 @@
+
+// Ensure proper module resolution for WatermelonDB
+include ':nozbe_watermelondb'
+project(':nozbe_watermelondb').projectDir = new File(rootProject.projectDir, '../node_modules/@nozbe/watermelondb/native/android')

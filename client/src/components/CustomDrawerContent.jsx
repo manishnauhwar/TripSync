@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../apis/api';
+import SyncIndicator from './SyncIndicator';
 
 const CustomDrawerContent = (props) => {
   const [username, setUsername] = useState('');
@@ -41,6 +42,11 @@ const CustomDrawerContent = (props) => {
         <Text style={styles.username}>Hello, {username}</Text>
       </View>
       <DrawerItemList {...props} />
+      
+      <View style={styles.syncContainer}>
+        <SyncIndicator />
+      </View>
+      
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
@@ -57,6 +63,10 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  syncContainer: {
+    marginTop: 10,
+    marginHorizontal: 5,
   },
   logoutButton: {
     marginTop: 20,

@@ -1,40 +1,56 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Appbar, Card } from 'react-native-paper';
+import { Appbar, Card, Banner } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import api from '../apis/api';
+import offlineApi from '../apis/offlineApi';
+import useSync from '../hooks/useSync';
 
 const TripsScreen = () => {
   const navigation = useNavigation();
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [offlineMode, setOfflineMode] = useState(false);
+  const { isOnline } = useSync();
 
   useFocusEffect(
     useCallback(() => {
       fetchTrips();
       return () => {};
-    }, [])
+    }, [isOnline]) // Re-fetch when online status changes
   );
 
   const fetchTrips = async () => {
     setLoading(true);
     try {
       console.log('Fetching trips...');
-      const response = await api.getTrips();
+      
+      // Use offlineApi which handles both online and offline scenarios
+      const response = await offlineApi.getTrips();
       console.log('Trips API response:', response);
       
       if (response.success) {
-        setTrips(response.data.data);
+        // Handle null data
+        const tripsData = response.data || [];
+        
+        // If it's an array, use it directly; if it's an object with data property, use that
+        const tripsArray = Array.isArray(tripsData) ? tripsData : 
+                         (tripsData.data && Array.isArray(tripsData.data)) ? tripsData.data : [];
+        
+        setTrips(tripsArray);
+        setOfflineMode(!!response.offlineMode);
         setError(null);
       } else {
         console.error('Error fetching trips:', response.error);
         setError(response.error || 'Failed to fetch trips');
+        setTrips([]);
       }
     } catch (err) {
       console.error('Exception fetching trips:', err);
       setError('Failed to fetch trips. Please check your connection.');
+      setTrips([]);
     } finally {
       setLoading(false);
     }
@@ -59,8 +75,11 @@ const TripsScreen = () => {
           <Text style={styles.tripName}>{item.name}</Text>
           <Text style={styles.tripDescription}>{item.description || 'No description'}</Text>
           <Text style={styles.participantsText}>
-            {item.participants.length} participant{item.participants.length !== 1 ? 's' : ''}
+            {item.participants ? `${item.participants.length} participant${item.participants.length !== 1 ? 's' : ''}` : '0 participants'}
           </Text>
+          {item.offlineRecord && (
+            <Text style={styles.offlineIndicator}>Not yet synced</Text>
+          )}
         </Card.Content>
       </Card>
     </TouchableOpacity>
@@ -73,6 +92,19 @@ const TripsScreen = () => {
         <Appbar.Content title="My Trips" />
         <Appbar.Action icon="plus" onPress={handleCreateTrip} />
       </Appbar.Header>
+
+      <Banner
+        visible={offlineMode}
+        actions={[
+          {
+            label: 'Refresh',
+            onPress: fetchTrips,
+          },
+        ]}
+        icon="wifi-off"
+      >
+        You're viewing offline data. Some features may be limited.
+      </Banner>
 
       {loading ? (
         <ActivityIndicator size="large" color="#6200ea" style={styles.loader} />
@@ -94,8 +126,10 @@ const TripsScreen = () => {
         <FlatList
           data={trips}
           renderItem={renderTripCard}
-          keyExtractor={item => item._id}
+          keyExtractor={item => item._id || Math.random().toString()}
           contentContainerStyle={styles.listContainer}
+          onRefresh={fetchTrips}
+          refreshing={loading}
         />
       )}
     </SafeAreaView>
@@ -122,6 +156,11 @@ const styles = StyleSheet.create({
   participantsText: {
     color: '#0066cc',
     fontSize: 12,
+  },
+  offlineIndicator: {
+    color: '#ff9800',
+    fontSize: 12,
+    marginTop: 4,
   },
   listContainer: {
     padding: 16,

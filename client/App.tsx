@@ -1,11 +1,12 @@
 import 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
-import { Linking, AppState, AppStateStatus } from 'react-native';
+import { Linking, AppState, AppStateStatus, Alert } from 'react-native';
 import { NavigationContainer, LinkingOptions } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Provider as PaperProvider } from 'react-native-paper';
+import { Q } from '@nozbe/watermelondb';
 
 import LoginScreen from './src/screen/LoginScreen';
 import RegisterScreen from './src/screen/RegisterScreen';
@@ -22,6 +23,7 @@ import ImageViewerScreen from './src/screen/ImageViewerScreen';
 import LocationViewerScreen from './src/screen/LocationViewerScreen';
 
 import CustomDrawerContent from './src/components/CustomDrawerContent';
+import syncService from './src/services/SyncService';
 
 const Stack = createStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -89,29 +91,64 @@ const App = () => {
   useEffect(() => {
     checkToken();
 
+    // Handle deep links
     const subscription = Linking.addEventListener('url', handleDeepLink);
     
-    Linking.getInitialURL().then((url) => {
-      if (url) {
-        console.log('App opened with initial URL:', url);
-      }
-    }).catch(err => console.error('An error occurred getting initial URL', err));
+    Linking.getInitialURL()
+      .then((url) => {
+        if (url) {
+          console.log('App opened with initial URL:', url);
+        }
+      })
+      .catch(err => console.error('An error occurred getting initial URL', err));
+
+    // Initialize sync service safely
+    initializeSyncService();
 
     return () => {
       subscription.remove();
+      cleanupSyncService();
     };
   }, []);
+
+  const initializeSyncService = () => {
+    console.log('Attempting to initialize sync service...');
+    try {
+      syncService.initialize();
+      console.log('Sync service initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize sync service:', error);
+      // Don't show error to user - app will continue in offline mode
+    }
+  };
+
+  const cleanupSyncService = () => {
+    console.log('Cleaning up sync service...');
+    try {
+      syncService.cleanup();
+    } catch (error) {
+      console.error('Error during sync service cleanup:', error);
+    }
+  };
 
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         checkToken();
+        
+        // Trigger sync safely when app becomes active again
+        try {
+          syncService.syncWithServer();
+        } catch (error) {
+          console.error('Error syncing when app became active:', error);
+        }
       }
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
-    const authCheckInterval = setInterval(checkToken, 1000);
+    // Check auth status less frequently to reduce unnecessary load
+    const authCheckInterval = setInterval(checkToken, 30000);
 
     return () => {
       subscription.remove();
