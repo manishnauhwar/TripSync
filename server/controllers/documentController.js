@@ -1,5 +1,6 @@
 import Document from '../models/documentModel.js';
 import Trip from '../models/tripModel.js';
+import { sendDocumentNotification } from './notificationController.js';
 
 // Upload a document to a trip
 export const uploadDocument = async (req, res) => {
@@ -56,6 +57,9 @@ export const uploadDocument = async (req, res) => {
     // Populate the user information
     const populatedDoc = await Document.findById(document._id)
       .populate('uploadedBy', 'username fullName email');
+
+    // Send notification about the new document
+    await sendDocumentNotification(tripId, userId, 'uploaded', name);
 
     // Emit socket event to trip participants
     if (req.io) {
@@ -155,8 +159,14 @@ export const deleteDocument = async (req, res) => {
       });
     }
 
+    // Store document name for notification
+    const documentName = document.name;
+
     // Delete the document
     await Document.findByIdAndDelete(documentId);
+
+    // Send notification about the deleted document
+    await sendDocumentNotification(tripId, userId, 'deleted', documentName);
 
     // Emit socket event to trip participants
     if (req.io) {

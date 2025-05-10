@@ -163,6 +163,14 @@ class NotificationService {
               initialTab: 'itinerary'
             }
           });
+        } else if (type === 'document') {
+          navigate('Trips', {
+            screen: 'TripDetails',
+            params: {
+              tripId,
+              initialTab: 'documents'
+            }
+          });
         } else {
           navigate('Trips', {
             screen: 'TripDetails',

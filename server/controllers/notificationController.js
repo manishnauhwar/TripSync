@@ -250,4 +250,55 @@ export const scheduleItineraryReminders = async (tripId, itemId) => {
   } catch (error) {
     console.error('Error scheduling itinerary reminder:', error);
   }
+};
+
+// Send document notification
+export const sendDocumentNotification = async (tripId, userId, action, documentName) => {
+  try {
+    // Get trip details
+    const trip = await Trip.findById(tripId);
+    if (!trip) {
+      console.error('Trip not found for document notification');
+      return;
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      console.error('User not found for document notification');
+      return;
+    }
+
+    // Get tokens for all participants except the user who performed the action
+    const tokens = await getParticipantTokens(tripId, userId);
+    
+    if (tokens.length === 0) {
+      console.log('No tokens found for participants');
+      return;
+    }
+
+    // Customize message based on action
+    const title = `Document ${action} in ${trip.name}`;
+    let body = '';
+    
+    switch (action) {
+      case 'uploaded':
+        body = `${user.fullName || user.username || user.email} uploaded "${documentName}"`;
+        break;
+      case 'deleted':
+        body = `${user.fullName || user.username || user.email} deleted "${documentName}"`;
+        break;
+      default:
+        body = `${user.fullName || user.username || user.email} made changes to "${documentName}"`;
+    }
+    
+    await sendNotification(tokens, title, body, {
+      tripId,
+      type: 'document',
+      action,
+      userId: userId.toString(),
+      documentName
+    });
+  } catch (error) {
+    console.error('Error sending document notification:', error);
+  }
 }; 
