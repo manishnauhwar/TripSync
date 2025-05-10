@@ -1,7 +1,8 @@
-import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Alert, ImageBackground, StatusBar, useColorScheme } from 'react-native';
 import { Card, Button } from 'react-native-paper';
 import React, { useState } from 'react';
 import api from '../apis/api';
+import { LinearGradient } from 'react-native-linear-gradient';
 
 const RegisterScreen = ({ navigation }) => {
     const [username, setUsername] = useState('');
@@ -11,6 +12,19 @@ const RegisterScreen = ({ navigation }) => {
     const [fullName, setFullName] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const colorScheme = useColorScheme();
+    const isDarkMode = colorScheme === 'dark';
+
+    const theme = {
+        background: isDarkMode ? 'rgba(18, 18, 18, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+        text: isDarkMode ? '#FFFFFF' : '#333333',
+        cardBackground: isDarkMode ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+        subtext: isDarkMode ? '#AAAAAA' : '#666666',
+        primary: '#6200ea',
+        accent: '#03DAC6',
+        error: '#CF6679',
+        divider: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)',
+    };
 
     const validateInputs = () => {
         if (!username || !email || !password || !confirmPassword || !fullName) {
@@ -78,140 +92,183 @@ const RegisterScreen = ({ navigation }) => {
     };
 
     return (
-        <View style={styles.container}>
-            <Card style={styles.card}>
-                <Card.Content style={styles.cardContent}>
-                    <View style={styles.form}>
-                        <Text style={styles.heading}>Create Account</Text>
-                        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                    </View>
-                    <View>
-                        <TextInput
-                            placeholder="Full Name"
-                            placeholderTextColor="#999"
-                            value={fullName}
-                            onChangeText={setFullName}
-                            style={styles.input}
-                        />
-                        <TextInput
-                            placeholder="Username"
-                            placeholderTextColor="#999"
-                            value={username}
-                            onChangeText={setUsername}
-                            style={styles.input}
-                        />
-                        <TextInput
-                            placeholder="Email"
-                            placeholderTextColor="#999"
-                            value={email}
-                            onChangeText={setEmail}
-                            style={styles.input}
-                            keyboardType="email-address"
-                        />
-                        <TextInput
-                            placeholder="Password"
-                            placeholderTextColor="#999"
-                            secureTextEntry
-                            value={password}
-                            onChangeText={setPassword}
-                            style={styles.input}
-                        />
-                        <TextInput
-                            placeholder="Confirm Password"
-                            placeholderTextColor="#999"
-                            secureTextEntry
-                            value={confirmPassword}
-                            onChangeText={setConfirmPassword}
-                            style={styles.input}
-                        />
-                        <Button
-                            mode="contained"
-                            onPress={handleRegister}
-                            style={styles.button}
-                            loading={loading}
-                            disabled={loading}
-                            labelStyle={styles.buttonLabel}
-                        >
-                            GET STARTED
-                        </Button>
-                        <Button
-                            mode="text"
-                            onPress={() => navigation.replace('Login')}
-                            style={styles.linkButton}
-                            labelStyle={styles.linkButtonLabel}
-                        >
-                            Already have an account? Login
-                        </Button>
-                    </View>
-                </Card.Content>
-            </Card>
-        </View>
+        <ImageBackground
+            source={require('../assets/images/5.jpeg')}
+            style={styles.backgroundImage}
+        >
+            <StatusBar
+                barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+                backgroundColor="transparent"
+                translucent
+            />
+            <View style={styles.container}>
+                <Card style={[styles.card, { backgroundColor: theme.background }]}>
+                    <Card.Content style={styles.cardContent}>
+                        <View style={styles.form}>
+                            <Text style={[styles.heading, { color: theme.text }]}>Create Account</Text>
+                            {error ? <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text> : null}
+                        </View>
+                        <View>
+                            <TextInput
+                                placeholder="Full Name"
+                                placeholderTextColor={theme.subtext}
+                                value={fullName}
+                                onChangeText={setFullName}
+                                style={[styles.input, { 
+                                    backgroundColor: theme.cardBackground,
+                                    color: theme.text,
+                                    borderColor: theme.divider
+                                }]}
+                            />
+                            <TextInput
+                                placeholder="Username"
+                                placeholderTextColor={theme.subtext}
+                                value={username}
+                                onChangeText={setUsername}
+                                style={[styles.input, { 
+                                    backgroundColor: theme.cardBackground,
+                                    color: theme.text,
+                                    borderColor: theme.divider
+                                }]}
+                            />
+                            <TextInput
+                                placeholder="Email"
+                                placeholderTextColor={theme.subtext}
+                                value={email}
+                                onChangeText={setEmail}
+                                style={[styles.input, { 
+                                    backgroundColor: theme.cardBackground,
+                                    color: theme.text,
+                                    borderColor: theme.divider
+                                }]}
+                                keyboardType="email-address"
+                            />
+                            <TextInput
+                                placeholder="Password"
+                                placeholderTextColor={theme.subtext}
+                                secureTextEntry
+                                value={password}
+                                onChangeText={setPassword}
+                                style={[styles.input, { 
+                                    backgroundColor: theme.cardBackground,
+                                    color: theme.text,
+                                    borderColor: theme.divider
+                                }]}
+                            />
+                            <TextInput
+                                placeholder="Confirm Password"
+                                placeholderTextColor={theme.subtext}
+                                secureTextEntry
+                                value={confirmPassword}
+                                onChangeText={setConfirmPassword}
+                                style={[styles.input, { 
+                                    backgroundColor: theme.cardBackground,
+                                    color: theme.text,
+                                    borderColor: theme.divider
+                                }]}
+                            />
+                            <LinearGradient
+                                colors={['#6200ea', '#03DAC6']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={styles.gradientButton}
+                            >
+                                <Button
+                                    mode="contained"
+                                    onPress={handleRegister}
+                                    style={styles.button}
+                                    loading={loading}
+                                    disabled={loading}
+                                    labelStyle={styles.buttonLabel}
+                                >
+                                    GET STARTED
+                                </Button>
+                            </LinearGradient>
+                            <Button
+                                mode="text"
+                                onPress={() => navigation.replace('Login')}
+                                style={styles.linkButton}
+                                labelStyle={[styles.linkButtonLabel, { color: theme.primary }]}
+                            >
+                                Already have an account? Login
+                            </Button>
+                        </View>
+                    </Card.Content>
+                </Card>
+            </View>
+        </ImageBackground>
     );
 };
 
 const styles = StyleSheet.create({
+    backgroundImage: {
+        flex: 1,
+        width: '100%',
+        height: '100%',
+    },
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5', 
-        justifyContent: 'center', 
-        paddingHorizontal: 20, 
+        justifyContent: 'center',
+        paddingHorizontal: 20,
     },
     card: {
-        backgroundColor: '#ffffff', 
-        borderRadius: 12,
+        borderRadius: 24,
         marginHorizontal: 10,
         elevation: 4,
-        shadowColor: '#000', 
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
     },
     cardContent: {
-        padding: 20, 
+        padding: 24,
     },
     form: {
-        alignItems: 'center', 
-        marginBottom: 20,
+        alignItems: 'center',
+        marginBottom: 24,
     },
     heading: {
-        fontSize: 28, 
+        fontSize: 32,
         fontWeight: 'bold',
-        color: '#333', 
-        marginBottom: 10, 
+        marginBottom: 16,
+        fontFamily: 'Roboto',
     },
     errorText: {
-        color: '#d32f2f',
         fontSize: 14,
         textAlign: 'center',
-        marginBottom: 10, 
+        marginBottom: 16,
+        fontFamily: 'Roboto',
     },
     input: {
-        marginBottom: 15, 
-        backgroundColor: '#fff', 
+        marginBottom: 16,
         fontSize: 16,
-        padding: 12,
+        padding: 16,
         borderWidth: 1,
-        borderColor: '#ddd',
-        borderRadius: 8,
-        color: '#333',
+        borderRadius: 12,
+        fontFamily: 'Roboto',
+    },
+    gradientButton: {
+        borderRadius: 12,
+        marginTop: 8,
+        marginBottom: 16,
     },
     button: {
-        marginTop: 20,
-        paddingVertical: 8, 
-        borderRadius: 8, 
-        backgroundColor: '#6200ea',
+        backgroundColor: 'transparent',
+        paddingVertical: 8,
+        borderRadius: 12,
     },
     buttonLabel: {
-        fontSize: 16, 
-        fontWeight: '600', 
+        fontSize: 16,
+        fontWeight: '600',
         color: '#fff',
+        fontFamily: 'Roboto',
     },
     linkButton: {
-        marginTop: 15,
+        marginTop: 8,
     },
     linkButtonLabel: {
         fontSize: 14,
-        color: '#6200ea',
+        fontFamily: 'Roboto',
     }
 });
 

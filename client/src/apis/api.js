@@ -19,7 +19,6 @@ const createAuthenticatedRequest = async () => {
     });
   } catch (error) {
     console.error('Error creating authenticated request:', error);
-    // Return a default instance without auth token if something went wrong
     return axios.create({
       baseURL: API_URL,
       headers: {
@@ -59,6 +58,7 @@ const createFormDataRequest = async () => {
 };
 
 const api = {
+  API_URL,
   register: async (username, email, password, fullName, confirmPassword) => {
     try {
       const payload = {
@@ -107,6 +107,7 @@ const api = {
       
       if (response.data.token) {
         await AsyncStorage.setItem('token', response.data.token);
+        console.log('Token saved:', response.data.token);
         if (response.data.user) {
           await AsyncStorage.setItem('userDetails', JSON.stringify(response.data.user));
         }
@@ -299,8 +300,11 @@ const api = {
       console.log('Updating itinerary item:', itemId);
       const instance = await createAuthenticatedRequest();
       const endpoint = `/api/trips/${tripId}/itinerary/${itemId}`;
+      console.log('Update itinerary endpoint:', `${API_URL}${endpoint}`);
+      console.log('Item data:', JSON.stringify(itemData));
       
       const response = await instance.put(endpoint, itemData);
+      console.log('Update itinerary response status:', response.status);
       return { success: true, data: response.data };
     } catch (error) {
       console.log('Update itinerary item error:', error?.response?.data?.message || error.message);
@@ -316,8 +320,10 @@ const api = {
       console.log('Deleting itinerary item:', itemId);
       const instance = await createAuthenticatedRequest();
       const endpoint = `/api/trips/${tripId}/itinerary/${itemId}`;
+      console.log('Delete itinerary endpoint:', `${API_URL}${endpoint}`);
       
       const response = await instance.delete(endpoint);
+      console.log('Delete itinerary response status:', response.status);
       return { success: true, data: response.data };
     } catch (error) {
       console.log('Delete itinerary item error:', error?.response?.data?.message || error.message);
@@ -331,11 +337,13 @@ const api = {
   reorderItineraryItems: async (tripId, day, items) => {
     try {
       console.log('Reordering itinerary items for day:', day);
-      console.log('Items to reorder with times:', items);
       const instance = await createAuthenticatedRequest();
       const endpoint = `/api/trips/${tripId}/itinerary-reorder`;
+      console.log('Reorder itinerary endpoint:', `${API_URL}${endpoint}`);
+      console.log('Items data:', JSON.stringify({ day, items }));
       
       const response = await instance.put(endpoint, { day, items });
+      console.log('Reorder itinerary response status:', response.status);
       return { success: true, data: response.data };
     } catch (error) {
       console.log('Reorder itinerary items error:', error?.response?.data?.message || error.message);
@@ -364,13 +372,11 @@ const api = {
     try {
       console.log('============ MEDIA UPLOAD START ============');
       
-      // Get token for authentication
       const token = await AsyncStorage.getItem('token');
       if (!token) {
         console.log('Warning: No authentication token found');
       }
       
-      // Create simple axios instance for upload
       const instance = axios.create({
         baseURL: API_URL,
         headers: {
@@ -378,7 +384,7 @@ const api = {
           'Accept': 'application/json',
           'Authorization': token ? `Bearer ${token}` : '',
         },
-        timeout: 60000, // 60 seconds timeout for large files
+        timeout: 60000, 
       });
       
       console.log('Sending upload request to:', `${API_URL}/api/chat/upload`);
@@ -395,15 +401,12 @@ const api = {
       console.log('Error message:', error.message);
       
       if (error.response) {
-        // Server responded with error
         console.log('Server responded with status:', error.response.status);
         console.log('Response data:', error.response.data);
       } else if (error.request) {
-        // Request was made but no response
         console.log('No response received from server');
         console.log('Request details:', error.request);
       } else {
-        // Error in setting up request
         console.log('Error setting up request:', error.message);
       }
       
@@ -449,6 +452,22 @@ const api = {
     }
   },
 
+  deleteMessage: async (tripId, messageId, deleteForEveryone = false) => {
+    try {
+      const instance = await createAuthenticatedRequest();
+      const response = await instance.delete(`/api/chat/messages/${tripId}/${messageId}`, {
+        data: { deleteForEveryone }
+      });
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.log('Delete message error:', error?.response?.data?.message || error.message);
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || 'Failed to delete message' 
+      };
+    }
+  },
+
   debugItinerary: async (tripId) => {
     try {
       console.log('DEBUG: Testing itinerary functionality for trip:', tripId);
@@ -486,17 +505,13 @@ const api = {
       console.log('Expenses API response status:', response.status);
       console.log('Raw expenses data:', response.data);
       
-      // Make sure we're returning an array, even if the response structure is unexpected
       let expensesData = [];
       
       if (response.data && Array.isArray(response.data)) {
-        // If response.data is already an array, use it
         expensesData = response.data;
       } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        // If response.data.data is an array (common API pattern), use that
         expensesData = response.data.data;
       } else if (response.data) {
-        // Last resort: try to parse the data or return an empty array
         console.log('Unexpected expenses data structure:', response.data);
         expensesData = [];
       }
@@ -531,10 +546,8 @@ const api = {
       console.log('Requesting PDF export from server for trip:', tripId);
       const instance = await createAuthenticatedRequest();
       
-      // Request the API but don't expect a direct file download since we're on React Native
       const response = await instance.get(`/api/trips/${tripId}/expenses/export-pdf`);
       
-      // The server should return a URL to the generated PDF that we can download or view
       console.log('Export PDF response:', response.data);
       
       if (response.data && response.data.pdfUrl) {
@@ -546,7 +559,6 @@ const api = {
           } 
         };
       } else {
-        // If there's no URL, the server processed the request but didn't provide a download link
         return { 
           success: false, 
           error: 'Server generated PDF but did not provide a download URL' 
@@ -557,6 +569,173 @@ const api = {
       return { 
         success: false, 
         error: error?.response?.data?.message || 'Failed to export expenses as PDF' 
+      };
+    }
+  },
+
+  getLocationCoordinates: async (location) => {
+    try {
+      console.log('Getting coordinates for location:', location);
+      if (!location) return { success: false, error: 'No location provided' };
+      
+      const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+        params: {
+          q: location,
+          format: 'json',
+          limit: 1
+        },
+        headers: {
+          'User-Agent': 'TripSync/1.0'
+        }
+      });
+      
+      if (response.data && response.data.length > 0) {
+        const coordinates = {
+          lat: parseFloat(response.data[0].lat),
+          lon: parseFloat(response.data[0].lon),
+          displayName: response.data[0].display_name
+        };
+        console.log('Coordinates found:', coordinates);
+        return { success: true, data: coordinates };
+      } else {
+        console.log('No coordinates found for location:', location);
+        return { success: false, error: 'Location not found' };
+      }
+    } catch (error) {
+      console.error('Error getting location coordinates:', error);
+      return { 
+        success: false, 
+        error: error?.message || 'Failed to get location coordinates' 
+      };
+    }
+  },
+
+  registerDevice: async (deviceId, fcmToken, platform) => {
+    try {
+      const instance = await createAuthenticatedRequest();
+      const response = await instance.post('/api/notifications/register-device', {
+        deviceId,
+        fcmToken,
+        platform
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error registering device:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  updateDeviceActivity: async (deviceId) => {
+    try {
+      const instance = await createAuthenticatedRequest();
+      const response = await instance.post('/api/notifications/update-activity', {
+        deviceId
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating device activity:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message
+      };
+    }
+  },
+
+  // Document management APIs
+  getTripDocuments: async (tripId) => {
+    try {
+      console.log('Fetching documents for trip:', tripId);
+      const instance = await createAuthenticatedRequest();
+      const response = await instance.get(`/api/trips/${tripId}/documents`);
+      
+      return { 
+        success: true, 
+        data: response.data.data || [] 
+      };
+    } catch (error) {
+      console.log('Get documents error:', error?.response?.data?.message || error.message);
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || 'Failed to fetch documents' 
+      };
+    }
+  },
+  
+  uploadTripDocument: async (tripId, documentData) => {
+    try {
+      console.log('Uploading document to trip:', tripId);
+      
+      // Check if this is a PDF and ensure proper type
+      const isPdf = (documentData.fileType && 
+        (documentData.fileType.includes('pdf') || documentData.fileType === 'application/pdf')) ||
+        (documentData.name && documentData.name.toLowerCase().endsWith('.pdf'));
+        
+      if (isPdf && documentData.fileType !== 'application/pdf') {
+        console.log('Correcting PDF fileType for upload');
+        documentData.fileType = 'application/pdf';
+      }
+      
+      const instance = await createAuthenticatedRequest();
+      const response = await instance.post(`/api/trips/${tripId}/documents`, documentData);
+      
+      return { 
+        success: true, 
+        data: response.data.data 
+      };
+    } catch (error) {
+      console.log('Upload document error:', error?.response?.data?.message || error.message);
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || 'Failed to upload document' 
+      };
+    }
+  },
+  
+  deleteTripDocument: async (tripId, documentId) => {
+    try {
+      console.log('Deleting document:', documentId, 'from trip:', tripId);
+      const instance = await createAuthenticatedRequest();
+      const response = await instance.delete(`/api/trips/${tripId}/documents/${documentId}`);
+      
+      return { 
+        success: true, 
+        message: response.data.message || 'Document deleted successfully' 
+      };
+    } catch (error) {
+      console.log('Delete document error:', error?.response?.data?.message || error.message);
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || 'Failed to delete document' 
+      };
+    }
+  },
+
+  googleLogin: async (userData) => {
+    try {
+      const response = await axios.post(`${API_URL}/api/users/google-login`, userData, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.data.token) {
+        await AsyncStorage.setItem('token', response.data.token);
+        if (response.data.user) {
+          await AsyncStorage.setItem('userDetails', JSON.stringify(response.data.user));
+        }
+        AsyncStorage.setItem('_lastAuthChange', Date.now().toString());
+      }
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.log('Google login error:', error?.response?.data?.message || error.message);
+      return { 
+        success: false, 
+        error: error?.response?.data?.message || 'Google login failed' 
       };
     }
   },

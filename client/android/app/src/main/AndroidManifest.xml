@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+         xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
   <!-- File Access & Upload -->
@@ -19,6 +20,11 @@
 <!-- Camera Access -->
 <uses-permission android:name="android.permission.CAMERA" />
 
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<!-- Required for FCM -->
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+<uses-permission android:name="android.permission.VIBRATE" />
+
 
     <application
       android:name=".MainApplication"
@@ -33,7 +39,24 @@
       <!-- Google Maps API Key -->
       <meta-data
         android:name="com.google.android.geo.API_KEY"
-        android:value="AIzaSyB8IgxqCInYtX3QQra3AMqZ8NzOq6mWB5s"/>
+        android:value="AIzaSyCkpmHAVEPbstU5diZgN5UUhdTJIOa-Kwg"/>
+      
+      <!-- Firebase Messaging default notification channel -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_channel_id"
+        android:value="tripsync_default_channel"
+        tools:replace="android:value"/>
+      
+      <!-- Firebase Messaging icon (optional) -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_icon"
+        android:resource="@mipmap/ic_notification" />
+      
+      <!-- Firebase Messaging color (optional) -->
+      <meta-data
+        android:name="com.google.firebase.messaging.default_notification_color"
+        android:resource="@color/notification_color"
+        tools:replace="android:resource"/>
       
       <activity
         android:name=".MainActivity"
@@ -45,6 +68,22 @@
         <intent-filter>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+        
+        <!-- Deep linking intent filter -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="tripsync" />
+        </intent-filter>
+        
+        <!-- App Links intent filter -->
+        <intent-filter android:autoVerify="true">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" android:host="tripsync.app" />
         </intent-filter>
       </activity>
     </application>

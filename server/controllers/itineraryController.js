@@ -1,4 +1,39 @@
 import Trip from '../models/tripModel.js';
+import axios from 'axios';
+import { 
+  sendItineraryUpdateNotification, 
+  scheduleItineraryReminders 
+} from './notificationController.js';
+
+// Helper function to fetch coordinates from OpenStreetMap API
+const fetchCoordinates = async (location) => {
+  if (!location) return null;
+  
+  try {
+    const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q: location,
+        format: 'json',
+        limit: 1
+      },
+      headers: {
+        'User-Agent': 'TripSync/1.0'
+      }
+    });
+    
+    if (response.data && response.data.length > 0) {
+      return {
+        lat: parseFloat(response.data[0].lat),
+        lon: parseFloat(response.data[0].lon),
+        displayName: response.data[0].display_name
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching coordinates:', error.message);
+    return null;
+  }
+};
 
 export const getItinerary = async (req, res) => {
   try {
@@ -71,6 +106,13 @@ export const addItineraryItem = async (req, res) => {
       .filter(item => item.day === day)
       .reduce((max, item) => Math.max(max, item.order || 0), -1);
 
+    // Fetch coordinates for the location if provided
+    let coordinates = null;
+    if (location) {
+      coordinates = await fetchCoordinates(location);
+      console.log(`Coordinates fetched for ${location}:`, coordinates);
+    }
+
     const newItem = {
       day,
       title,
@@ -78,11 +120,23 @@ export const addItineraryItem = async (req, res) => {
       location,
       startTime,
       endTime,
-      order: maxOrder + 1
+      order: maxOrder + 1,
+      coordinates
     };
 
     trip.itinerary.push(newItem);
     await trip.save();
+
+    // Get the ID of the newly added item
+    const addedItem = trip.itinerary[trip.itinerary.length - 1];
+    
+    // Send notification about the new item
+    await sendItineraryUpdateNotification(tripId, 'add', title, userId);
+    
+    // Schedule reminder notification if start time is in the future
+    if (startTime && new Date(startTime) > new Date()) {
+      await scheduleItineraryReminders(tripId, addedItem._id);
+    }
 
     res.status(201).json({
       success: true,
@@ -138,6 +192,17 @@ export const updateItineraryItem = async (req, res) => {
         message: 'Itinerary item not found'
       });
     }
+    
+    // Store old values for comparison
+    const oldStartTime = new Date(item.startTime);
+    const oldTitle = item.title;
+
+    // Check if location has changed and fetch new coordinates if needed
+    let coordinates = item.coordinates;
+    if (location !== undefined && location !== item.location) {
+      coordinates = await fetchCoordinates(location);
+      console.log(`Updated coordinates fetched for ${location}:`, coordinates);
+    }
 
     item.day = day || item.day;
     item.title = title || item.title;
@@ -145,8 +210,20 @@ export const updateItineraryItem = async (req, res) => {
     item.location = location !== undefined ? location : item.location;
     item.startTime = startTime || item.startTime;
     item.endTime = endTime || item.endTime;
+    item.coordinates = coordinates;
 
     await trip.save();
+    
+    // Send notification about the updated item
+    await sendItineraryUpdateNotification(tripId, 'update', item.title, userId);
+    
+    // If start time was changed, reschedule the reminder
+    const newStartTime = new Date(item.startTime);
+    if (newStartTime.getTime() !== oldStartTime.getTime() || item.title !== oldTitle) {
+      if (newStartTime > new Date()) {
+        await scheduleItineraryReminders(tripId, itemId);
+      }
+    }
 
     res.status(200).json({
       success: true,
@@ -201,9 +278,16 @@ export const deleteItineraryItem = async (req, res) => {
         message: 'Itinerary item not found'
       });
     }
+    
+    // Save the title before deletion
+    const itemTitle = item.title;
 
+    // Remove the item
     trip.itinerary.pull(itemId);
     await trip.save();
+    
+    // Send notification about the deleted item
+    await sendItineraryUpdateNotification(tripId, 'delete', itemTitle, userId);
 
     res.status(200).json({
       success: true,
@@ -224,8 +308,12 @@ export const reorderItineraryItems = async (req, res) => {
     const userId = req.user._id;
     const { day, items } = req.body;
 
-    console.log(`Reordering itinerary items for trip: ${tripId}, day: ${day}`);
-    console.log('Items to reorder:', JSON.stringify(items));
+    if (!Array.isArray(items)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Items must be an array'
+      });
+    }
 
     const trip = await Trip.findOne({
       _id: tripId,
@@ -250,23 +338,22 @@ export const reorderItineraryItems = async (req, res) => {
       });
     }
 
+    // Update each item's order and times based on the provided order
     for (const item of items) {
-      const itineraryItem = trip.itinerary.id(item.id);
-      if (itineraryItem) {
-        itineraryItem.order = item.order;
-        
-        // Also update start and end times if provided
-        if (item.startTime) {
-          itineraryItem.startTime = new Date(item.startTime);
-        }
-        
-        if (item.endTime) {
-          itineraryItem.endTime = new Date(item.endTime);
-        }
+      const { id, order, startTime, endTime } = item;
+      const existingItem = trip.itinerary.id(id);
+      
+      if (existingItem) {
+        existingItem.order = order;
+        if (startTime) existingItem.startTime = startTime;
+        if (endTime) existingItem.endTime = endTime;
       }
     }
 
     await trip.save();
+    
+    // Send notification about the reordering
+    await sendItineraryUpdateNotification(tripId, 'reorder', 'Itinerary', userId);
 
     res.status(200).json({
       success: true,

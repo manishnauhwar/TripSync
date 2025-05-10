@@ -24,6 +24,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Password is required'],
       minlength: 6
+    },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true
+    },
+    profilePicture: {
+      type: String,
+      default: ''
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
     }
   },
   { timestamps: true }

@@ -11,6 +11,13 @@ export default class Message extends Model {
   @text('trip_id') tripId;
   @text('sender_id') senderId;
   @text('content') content;
+  @text('type') type;
+  @text('media_url') mediaUrl;
+  @field('latitude') latitude;
+  @field('longitude') longitude;
+  @text('read_by') readBy;
+  @field('deleted') deleted;
+  @text('deleted_for') deletedFor;
   @text('server_id') serverId;
   @readonly @date('created_at') createdAt;
   @readonly @date('updated_at') updatedAt;
@@ -31,6 +38,27 @@ export default class Message extends Model {
     });
   }
 
+  @action async markAsRead(userId) {
+    const currentReadBy = this.readBy ? JSON.parse(this.readBy) : [];
+    if (!currentReadBy.includes(userId)) {
+      currentReadBy.push(userId);
+      return this.update(message => {
+        message.readBy = JSON.stringify(currentReadBy);
+      });
+    }
+  }
+
+  @action async markAsDeleted(userId) {
+    const currentDeletedFor = this.deletedFor ? JSON.parse(this.deletedFor) : [];
+    if (!currentDeletedFor.includes(userId)) {
+      currentDeletedFor.push(userId);
+      return this.update(message => {
+        message.deletedFor = JSON.stringify(currentDeletedFor);
+        message.deleted = currentDeletedFor.length > 0;
+      });
+    }
+  }
+
   // Helper method to prepare message data for API
   prepareForSync() {
     return {
@@ -38,6 +66,15 @@ export default class Message extends Model {
       trip: this.tripId,
       sender: this.senderId,
       content: this.content,
+      type: this.type,
+      mediaUrl: this.mediaUrl,
+      location: this.latitude && this.longitude ? {
+        latitude: this.latitude,
+        longitude: this.longitude
+      } : null,
+      readBy: this.readBy ? JSON.parse(this.readBy) : [],
+      deleted: this.deleted,
+      deletedFor: this.deletedFor ? JSON.parse(this.deletedFor) : [],
       createdAt: this.createdAt?.toISOString(),
     };
   }

@@ -88,3 +88,57 @@ export const loginUser = async (req, res) => {
   }
 };
 
+export const googleLogin = async (req, res) => {
+    try {
+        const { email, name, googleId, photo } = req.body;
+
+        if (!email || !googleId) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Email and Google ID are required' 
+            });
+        }
+
+        // Check if user exists
+        let user = await User.findOne({ email });
+
+        if (!user) {
+            // Create new user if doesn't exist
+            user = await User.create({
+                email,
+                fullName: name,
+                username: email.split('@')[0],
+                googleId,
+                profilePicture: photo || '',
+                password: await bcrypt.hash(googleId, 10)
+            });
+        } else if (!user.googleId) {
+            // Update existing user with Google ID
+            user.googleId = googleId;
+            if (photo) user.profilePicture = photo;
+            await user.save();
+        }
+
+        const token = generateToken(user._id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Google login successful',
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                fullName: user.fullName,
+                email: user.email,
+                profilePicture: user.profilePicture
+            }
+        });
+    } catch (error) {
+        console.error('Google login error:', error);
+        res.status(500).json({ 
+            success: false,
+            message: error.message 
+        });
+    }
+};
+

@@ -10,6 +10,8 @@ import Participant from './Participant';
 import ItineraryItem from './ItineraryItem';
 import Message from './Message';
 import Expense from './Expense';
+import ExpenseSplit from './ExpenseSplit';
+import Document from './Document';
 
 console.log('Initializing WatermelonDB...');
 
@@ -65,7 +67,9 @@ try {
       Participant,
       ItineraryItem,
       Message,
-      Expense
+      Expense,
+      ExpenseSplit,
+      Document
     ],
   });
   console.log('WatermelonDB database initialized successfully');
@@ -84,5 +88,7 @@ export {
   Participant,
   ItineraryItem,
   Message,
-  Expense
+  Expense,
+  ExpenseSplit,
+  Document
 }; 

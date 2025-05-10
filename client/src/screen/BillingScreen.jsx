@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Alert, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ScrollView, Alert, Platform, Linking, StatusBar, useColorScheme, ImageBackground } from 'react-native';
 import { Appbar, FAB, Card, Title, Button, Modal, Portal, TextInput, Checkbox, RadioButton, Divider, Avatar, ActivityIndicator } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
@@ -8,6 +8,7 @@ import { PermissionsAndroid } from 'react-native';
 import api from '../apis/api';
 import RNHTMLtoPDF from 'react-native-html-to-pdf';
 import { PERMISSIONS, RESULTS, request, requestMultiple, check } from 'react-native-permissions';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const escapeHtml = unsafe =>
     typeof unsafe === 'string'
@@ -23,26 +24,23 @@ const requestStoragePermission = async () => {
   if (Platform.OS !== 'android') return true;
 
   try {
-    // Get Android version
     const apiLevel = Platform.Version;
     console.log('Android API level:', apiLevel);
-    
-    // Different permissions based on Android version
     let permissions = [];
     
-    if (apiLevel >= 33) { // Android 13+
+    if (apiLevel >= 33) {
       permissions = [
         PERMISSIONS.ANDROID.READ_MEDIA_IMAGES,
         PERMISSIONS.ANDROID.READ_MEDIA_VIDEO
       ];
       console.log('Using Android 13+ permissions');
-    } else if (apiLevel >= 29) { // Android 10+
+    } else if (apiLevel >= 29) {
       permissions = [
         PERMISSIONS.ANDROID.READ_EXTERNAL_STORAGE,
         PERMISSIONS.ANDROID.WRITE_EXTERNAL_STORAGE
       ];
       console.log('Using Android 10+ permissions');
-    } else { // Older Android
+    } else {
       permissions = [
         PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
         PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
@@ -51,8 +49,6 @@ const requestStoragePermission = async () => {
     }
     
     console.log('Requesting permissions:', permissions);
-
-    // For Android 13+, use react-native-permissions
     if (apiLevel >= 33) {
       const results = await requestMultiple(permissions);
       console.log('Permission results:', results);
@@ -65,8 +61,6 @@ const requestStoragePermission = async () => {
         console.log('All permissions granted');
         return true;
       }
-      
-      // Handle different results
       const anyDenied = Object.values(results).some(
         (result) => result === RESULTS.DENIED
       );
@@ -97,17 +91,13 @@ const requestStoragePermission = async () => {
       
       return false;
     } 
-    // For older Android versions, use the existing PermissionsAndroid API
     else {
-      // Check if permissions are already granted
       const readGranted = await PermissionsAndroid.check(permissions[0]);
       const writeGranted = await PermissionsAndroid.check(permissions[1]);
       if (readGranted && writeGranted) {
         console.log('Permissions already granted');
         return true;
       }
-
-      // Show custom Alert with three options
       const userChoice = await new Promise((resolve) => {
         Alert.alert(
           'Storage Permission',
@@ -120,14 +110,10 @@ const requestStoragePermission = async () => {
           { cancelable: false }
         );
       });
-
-      // If user doesn't choose "Allow," return false
       if (userChoice !== 'allow') {
         console.log('User chose not to allow:', userChoice);
         return false;
       }
-
-      // Request permissions if "Allow" was selected
       const result = await PermissionsAndroid.requestMultiple(permissions);
       console.log('Permission request result:', result);
 
@@ -174,7 +160,7 @@ const requestStoragePermission = async () => {
 };
 
 const BillingScreen = ({ route, navigation }) => {
-  const { tripId, tripName, participants } = route.params;
+  const { tripId, tripName, participants = [] } = route.params || {};
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -191,6 +177,22 @@ const BillingScreen = ({ route, navigation }) => {
   const [date, setDate] = useState(new Date());
   const [balances, setBalances] = useState({});
   const [exportLoading, setExportLoading] = useState(false);
+  
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
+
+  const theme = {
+    background: isDarkMode ? 'rgba(18, 18, 18, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+    text: isDarkMode ? '#FFFFFF' : '#333333',
+    cardBackground: isDarkMode ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+    subtext: isDarkMode ? '#AAAAAA' : '#666666',
+    primary: '#6200ea',
+    accent: '#03DAC6',
+    error: '#CF6679',
+    divider: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)',
+    modalBackground: isDarkMode ? '#121212' : '#FFFFFF',
+    inputBackground: isDarkMode ? '#1E1E1E' : '#F5F5F5',
+  };
 
   useEffect(() => {
     fetchExpenses();
@@ -230,26 +232,38 @@ const BillingScreen = ({ route, navigation }) => {
 
   const calculateBalances = expenseList => {
     const balanceData = {};
-    participants.forEach(p => (balanceData[p.email] = { owes: {}, owed: {}, total: 0 }));
-    if (Array.isArray(expenseList)) {
-      expenseList.forEach(expense => {
-        const { paidBy, splitWith } = expense;
-        if (Array.isArray(splitWith)) {
-          splitWith.forEach(split => {
-            const { email, amount } = split;
-            if (email !== paidBy) {
-              balanceData[email].owes[paidBy] = (balanceData[email].owes[paidBy] || 0) + amount;
-              balanceData[paidBy].owed[email] = (balanceData[paidBy].owed[email] || 0) + amount;
-            }
-          });
+    if (Array.isArray(participants)) {
+      participants.forEach(p => {
+        if (p && p.email) {
+          balanceData[p.email] = { owes: {}, owed: {}, total: 0 };
         }
       });
-      participants.forEach(p => {
-        const email = p.email;
-        const totalOwed = Object.values(balanceData[email].owed).reduce((sum, amt) => sum + amt, 0);
-        const totalOwes = Object.values(balanceData[email].owes).reduce((sum, amt) => sum + amt, 0);
-        balanceData[email].total = totalOwed - totalOwes;
-      });
+      if (Array.isArray(expenseList)) {
+        expenseList.forEach(expense => {
+          const { paidBy, splitWith } = expense || {};
+          if (paidBy && Array.isArray(splitWith)) {
+            splitWith.forEach(split => {
+              const { email, amount } = split || {};
+              if (email && email !== paidBy && amount) {
+                // Make sure the objects exist before trying to access their properties
+                if (!balanceData[email]) balanceData[email] = { owes: {}, owed: {}, total: 0 };
+                if (!balanceData[paidBy]) balanceData[paidBy] = { owes: {}, owed: {}, total: 0 };
+                
+                balanceData[email].owes[paidBy] = (balanceData[email].owes[paidBy] || 0) + amount;
+                balanceData[paidBy].owed[email] = (balanceData[paidBy].owed[email] || 0) + amount;
+              }
+            });
+          }
+        });
+        participants.forEach(p => {
+          const email = p?.email;
+          if (email && balanceData[email]) {
+            const totalOwed = Object.values(balanceData[email].owed || {}).reduce((sum, amt) => sum + amt, 0);
+            const totalOwes = Object.values(balanceData[email].owes || {}).reduce((sum, amt) => sum + amt, 0);
+            balanceData[email].total = totalOwed - totalOwes;
+          }
+        });
+      }
     }
     setBalances(balanceData);
   };
@@ -299,7 +313,11 @@ const BillingScreen = ({ route, navigation }) => {
   };
 
   const toggleParticipantSelection = email => setSplitWith(splitWith.includes(email) ? splitWith.filter(e => e !== email) : [...splitWith, email]);
-  const selectAllParticipants = () => setSplitWith(participants.map(p => p.email));
+  const selectAllParticipants = () => {
+    if (Array.isArray(participants)) {
+      setSplitWith(participants.map(p => p.email));
+    }
+  };
   const getInitials = email => email?.split('@')[0]?.charAt(0)?.toUpperCase() || '?';
   const formatDate = dateString => {
     try {
@@ -333,11 +351,11 @@ const BillingScreen = ({ route, navigation }) => {
             <h2>Balances</h2>
             <table>
               <tr><th>Person</th><th>Balance</th><th>Status</th></tr>
-              ${participants.map(p => {
+              ${Array.isArray(participants) ? participants.map(p => {
                 const balance = balances[p.email]?.total || 0;
                 const status = balance > 0 ? `Gets $${Math.abs(balance).toFixed(2)}` : balance < 0 ? `Owes $${Math.abs(balance).toFixed(2)}` : 'Settled';
                 return `<tr><td>${escapeHtml(p.email)}</td><td class="${balance > 0 ? 'positive' : balance < 0 ? 'negative' : 'neutral'}">$${balance.toFixed(2)}</td><td>${status}</td></tr>`;
-              }).join('')}
+              }).join('') : ''}
             </table>
             <h2>Expenses</h2>
             <table>
@@ -411,9 +429,10 @@ const BillingScreen = ({ route, navigation }) => {
   };
 
   const renderExpenseItem = ({ item }) => {
-    const isUserInvolved = item.paidBy === currentUser?.email || item.splitWith.some(s => s.email === currentUser?.email);
+    const isUserInvolved = item.paidBy === currentUser?.email || 
+      (Array.isArray(item.splitWith) && item.splitWith.some(s => s.email === currentUser?.email));
     let userAmount = 0;
-    if (currentUser) {
+    if (currentUser && Array.isArray(item.splitWith)) {
       if (item.paidBy === currentUser.email) {
         userAmount = item.splitWith.reduce((sum, s) => s.email !== currentUser.email ? sum + s.amount : sum, 0);
       } else {
@@ -423,17 +442,20 @@ const BillingScreen = ({ route, navigation }) => {
     }
     return (
       <TouchableOpacity onPress={() => { setSelectedExpense(item); setExpenseModalVisible(true); }}>
-        <Card style={styles.expenseCard}>
+        <Card style={[styles.expenseCard, { backgroundColor: theme.cardBackground }]}>
           <Card.Content style={styles.expenseCardContent}>
             <View style={styles.expenseDateCol}>
-              <Text style={styles.expenseDate}>{formatDate(item.date)}</Text>
+              <Text style={[styles.expenseDate, { color: theme.subtext }]}>{formatDate(item.date)}</Text>
             </View>
             <View style={styles.expenseMainCol}>
-              <Text style={styles.expenseDescription}>{item.description}</Text>
-              <Text style={styles.expensePaidBy}>Paid by {item.paidBy === currentUser?.email ? 'you' : item.paidBy}</Text>
+              <Text style={[styles.expenseDescription, { color: theme.text }]}>{item.description}</Text>
+              <Text style={[styles.expensePaidBy, { color: theme.subtext }]}>Paid by {item.paidBy === currentUser?.fullame ? 'you' : item.paidBy}</Text>
             </View>
             <View style={styles.expenseAmountCol}>
-              <Text style={[styles.expenseAmount, userAmount > 0 ? styles.positive : styles.negative]}>
+              <Text style={[
+                styles.expenseAmount, 
+                userAmount > 0 ? styles.positive : (userAmount < 0 ? styles.negative : { color: theme.subtext })
+              ]}>
                 {userAmount === 0 ? '-' : userAmount > 0 ? `+${formatCurrency(userAmount)}` : formatCurrency(userAmount)}
               </Text>
             </View>
@@ -446,13 +468,24 @@ const BillingScreen = ({ route, navigation }) => {
   const renderSummaryItem = ({ item }) => {
     const balance = balances[item.email] || { total: 0 };
     return (
-      <Card style={styles.summaryCard}>
+      <Card style={[styles.summaryCard, { backgroundColor: theme.cardBackground }]}>
         <Card.Content style={styles.summaryCardContent}>
           <View style={styles.summaryUserInfo}>
-            <Avatar.Text size={40} label={getInitials(item.email)} style={styles.summaryAvatar} />
-            <Text style={styles.summaryUserEmail}>{item.email === currentUser?.email ? 'You' : item.email}</Text>
+            <Avatar.Text 
+              size={40} 
+              label={getInitials(item.email)} 
+              style={styles.summaryAvatar} 
+              color={isDarkMode ? '#000000' : '#FFFFFF'}
+              backgroundColor={theme.primary}
+            />
+            <Text style={[styles.summaryUserEmail, { color: theme.text }]}>
+              {item.email === currentUser?.email ? 'You' : item.email}
+            </Text>
           </View>
-          <Text style={[styles.summaryBalance, balance.total > 0 ? styles.positive : balance.total < 0 ? styles.negative : styles.neutral]}>
+          <Text style={[
+            styles.summaryBalance, 
+            balance.total > 0 ? styles.positive : (balance.total < 0 ? styles.negative : styles.neutral)
+          ]}>
             {balance.total > 0 ? `Get back ${formatCurrency(balance.total)}` : balance.total < 0 ? `Owe ${formatCurrency(Math.abs(balance.total))}` : 'Settled'}
           </Text>
         </Card.Content>
@@ -461,215 +494,542 @@ const BillingScreen = ({ route, navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Trip Expenses" subtitle={tripName} />
-        <Appbar.Action icon="file-export" onPress={exportToPDF} disabled={exportLoading} />
-        {exportLoading && <ActivityIndicator color="#fff" size={20} />}
-      </Appbar.Header>
+    <ImageBackground
+      source={require('../assets/images/1.jpg')}
+      style={styles.backgroundImage}
+    >
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
+      <SafeAreaView style={styles.container}>
+        <Appbar.Header style={[styles.mainheader, { backgroundColor: theme.primary }]}>
+          <Appbar.BackAction onPress={() => navigation.goBack()} color="#FFFFFF" />
+          <Appbar.Content title="Trip Expenses" subtitle={tripName} titleStyle={{ color: '#FFFFFF' }} subtitleStyle={{ color: 'rgba(255, 255, 255, 0.8)' }} />
+          <Appbar.Action icon="file-export" onPress={exportToPDF} disabled={exportLoading} color="#FFFFFF" />
+          {exportLoading && <ActivityIndicator color="#FFFFFF" size={20} />}
+          <Appbar.Action icon="chart-line" onPress={() => setSummaryVisible(true)} color="#FFFFFF" />
+        </Appbar.Header>
 
-      {loading && !expenses.length ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6200ea" />
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Button mode="contained" onPress={fetchExpenses}>Retry</Button>
-        </View>
-      ) : (
-        <FlatList
-          data={expenses}
-          keyExtractor={item => item._id}
-          renderItem={renderExpenseItem}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No expenses yet</Text>
-              <Text style={styles.emptySubText}>Tap + to add an expense</Text>
+        <View style={[styles.contentContainer, { backgroundColor: 'transparent' }]}>
+          {loading && !expenses.length ? (
+            <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+              <ActivityIndicator size="large" color={theme.primary} />
             </View>
-          }
-          contentContainerStyle={styles.listContent}
-        />
-      )}
-
-      <FAB style={styles.fab} icon="plus" onPress={() => setModalVisible(true)} />
-
-      <Portal>
-        <Modal visible={modalVisible} onDismiss={() => setModalVisible(false)} contentContainerStyle={styles.modalContainer}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <Title style={styles.modalTitle}>Add Expense</Title>
-            <TextInput label="Description" value={description} onChangeText={setDescription} style={styles.input} mode="outlined" />
-            <TextInput label="Amount" value={amount} onChangeText={setAmount} style={styles.input} mode="outlined" keyboardType="numeric" left={<TextInput.Affix text="$" />} />
-            <Text style={styles.sectionTitle}>Paid by</Text>
-            <RadioButton.Group onValueChange={setPaidBy} value={paidBy}>
-              {participants.map(p => (
-                <View key={p._id} style={styles.radioItem}>
-                  <RadioButton value={p.email} />
-                  <Text style={styles.radioLabel}>{p.email === currentUser?.email ? 'You' : p.email}</Text>
+          ) : error ? (
+            <View style={[styles.errorContainer, { backgroundColor: theme.background }]}>
+              <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>
+              <Button 
+                mode="contained" 
+                onPress={fetchExpenses}
+                color={theme.primary}
+              >
+                Retry
+              </Button>
+            </View>
+          ) : (
+            <View style={[styles.listContainer, { backgroundColor: theme.background }]}>
+              {expenses.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Icon name="currency-usd" size={64} color={theme.subtext} style={styles.emptyIcon} />
+                  <Text style={[styles.emptyText, { color: theme.text }]}>No expenses yet</Text>
+                  <Text style={[styles.emptySubText, { color: theme.subtext }]}>Tap + to add an expense</Text>
                 </View>
-              ))}
-            </RadioButton.Group>
-            <Divider style={styles.divider} />
-            <Text style={styles.sectionTitle}>Split Options</Text>
-            <RadioButton.Group onValueChange={setSplitType} value={splitType}>
-              <View style={styles.radioItem}>
-                <RadioButton value="equal" />
-                <Text style={styles.radioLabel}>Split equally</Text>
-              </View>
-              <View style={styles.radioItem}>
-                <RadioButton value="full" />
-                <Text style={styles.radioLabel}>Full amount each</Text>
-              </View>
-            </RadioButton.Group>
-            <Divider style={styles.divider} />
-            <View style={styles.splitWithHeader}>
-              <Text style={styles.sectionTitle}>Split with</Text>
-              <Button compact mode="text" onPress={selectAllParticipants}>Select All</Button>
+              ) : (
+                <FlatList
+                  data={expenses}
+                  keyExtractor={item => item._id}
+                  renderItem={renderExpenseItem}
+                  contentContainerStyle={styles.listContent}
+                />
+              )}
             </View>
-            {participants.map(p => (
-              <View key={p._id} style={styles.checkboxItem}>
-                <Checkbox status={splitWith.includes(p.email) ? 'checked' : 'unchecked'} onPress={() => toggleParticipantSelection(p.email)} />
-                <Text style={styles.checkboxLabel}>{p.email === currentUser?.email ? 'You' : p.email}</Text>
-              </View>
-            ))}
-            <View style={styles.modalButtonsContainer}>
-              <Button mode="outlined" onPress={() => setModalVisible(false)} style={styles.modalButton}>Cancel</Button>
-              <Button mode="contained" onPress={handleAddExpense} style={styles.modalButton} loading={loading}>Save</Button>
-            </View>
-          </ScrollView>
-        </Modal>
-      </Portal>
-
-      <Portal>
-        <Modal visible={expenseModalVisible} onDismiss={() => setExpenseModalVisible(false)} contentContainerStyle={styles.modalContainer}>
-          {selectedExpense && (
-            <ScrollView>
-              <Title style={styles.modalTitle}>{selectedExpense.description}</Title>
-              <View style={styles.expenseDetailItem}>
-                <Text style={styles.expenseDetailLabel}>Amount:</Text>
-                <Text style={styles.expenseDetailValue}>{formatCurrency(selectedExpense.amount)}</Text>
-              </View>
-              <View style={styles.expenseDetailItem}>
-                <Text style={styles.expenseDetailLabel}>Date:</Text>
-                <Text style={styles.expenseDetailValue}>{formatDate(selectedExpense.date)}</Text>
-              </View>
-              <View style={styles.expenseDetailItem}>
-                <Text style={styles.expenseDetailLabel}>Paid by:</Text>
-                <Text style={styles.expenseDetailValue}>{selectedExpense.paidBy === currentUser?.email ? 'You' : selectedExpense.paidBy}</Text>
-              </View>
-              <Divider style={styles.divider} />
-              <Text style={styles.sectionTitle}>Split Details</Text>
-              {selectedExpense.splitWith.map((split, index) => (
-                <View key={index} style={styles.splitDetailItem}>
-                  <Text style={styles.splitDetailEmail}>{split.email === currentUser?.email ? 'You' : split.email}</Text>
-                  <Text style={styles.splitDetailAmount}>{formatCurrency(split.amount)}</Text>
-                </View>
-              ))}
-              <Button mode="outlined" onPress={() => setExpenseModalVisible(false)} style={[styles.modalButton, { marginTop: 20 }]}>Close</Button>
-            </ScrollView>
           )}
-        </Modal>
-      </Portal>
+        </View>
 
-      <Portal>
-        <Modal visible={summaryVisible} onDismiss={() => setSummaryVisible(false)} contentContainerStyle={styles.modalContainer}>
-          <ScrollView>
-            <Title style={styles.modalTitle}>Balance Summary</Title>
-            <FlatList
-              data={participants}
-              keyExtractor={item => item._id}
-              renderItem={renderSummaryItem}
-              scrollEnabled={false}
-              ListHeaderComponent={<Text style={styles.summaryDescription}>Total owes and owed</Text>}
-            />
-            {currentUser && balances[currentUser.email] && (
-              <>
-                <Divider style={styles.divider} />
-                <Text style={styles.sectionTitle}>Your Balances</Text>
-                {Object.keys(balances[currentUser.email].owes).length > 0 && (
-                  <>
-                    <Text style={styles.balanceSubtitle}>You owe:</Text>
-                    {Object.entries(balances[currentUser.email].owes).map(([person, amount]) => (
-                      <View key={`owe-${person}`} style={styles.balanceItem}>
-                        <Text style={styles.balancePerson}>{person}</Text>
-                        <Text style={[styles.balanceAmount, styles.negative]}>{formatCurrency(amount)}</Text>
-                      </View>
-                    ))}
-                  </>
-                )}
-                {Object.keys(balances[currentUser.email].owed).length > 0 && (
-                  <>
-                    <Text style={styles.balanceSubtitle}>You are owed:</Text>
-                    {Object.entries(balances[currentUser.email].owed).map(([person, amount]) => (
-                      <View key={`owed-${person}`} style={styles.balanceItem}>
-                        <Text style={styles.balancePerson}>{person}</Text>
-                        <Text style={[styles.balanceAmount, styles.positive]}>{formatCurrency(amount)}</Text>
-                      </View>
-                    ))}
-                  </>
-                )}
-              </>
+        <FAB 
+          style={[styles.fab, { backgroundColor: theme.primary }]} 
+          icon="plus" 
+          onPress={() => setModalVisible(true)} 
+          color="#fff"
+        />
+
+        <Portal>
+          <Modal 
+            visible={modalVisible} 
+            onDismiss={() => setModalVisible(false)} 
+            contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.modalBackground }]}
+          >
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Title style={[styles.modalTitle, { color: theme.text }]}>Add Expense</Title>
+              <TextInput 
+                label="Description" 
+                value={description} 
+                onChangeText={setDescription} 
+                style={styles.input} 
+                mode="outlined"
+                theme={{ colors: { primary: theme.primary, text: theme.text, placeholder: theme.subtext } }}
+              />
+              <TextInput 
+                label="Amount" 
+                value={amount} 
+                onChangeText={setAmount} 
+                style={styles.input} 
+                mode="outlined" 
+                keyboardType="numeric" 
+                left={<TextInput.Affix text="$" />}
+                theme={{ colors: { primary: theme.primary, text: theme.text, placeholder: theme.subtext } }}
+              />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Paid by</Text>
+              <RadioButton.Group onValueChange={setPaidBy} value={paidBy}>
+                {Array.isArray(participants) && participants.map(p => (
+                  <View key={p._id || p.email} style={styles.radioItem}>
+                    <RadioButton 
+                      value={p.email} 
+                      color={theme.primary}
+                      uncheckedColor={theme.subtext}
+                    />
+                    <Text style={[styles.radioLabel, { color: theme.text }]}>
+                      {p.email === currentUser?.email ? 'You' : p.email}
+                    </Text>
+                  </View>
+                ))}
+              </RadioButton.Group>
+              <Divider style={[styles.divider, { backgroundColor: theme.divider }]} />
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Split Options</Text>
+              <RadioButton.Group onValueChange={setSplitType} value={splitType}>
+                <View style={styles.radioItem}>
+                  <RadioButton 
+                    value="equal" 
+                    color={theme.primary}
+                    uncheckedColor={theme.subtext}
+                  />
+                  <Text style={[styles.radioLabel, { color: theme.text }]}>Split equally</Text>
+                </View>
+                <View style={styles.radioItem}>
+                  <RadioButton 
+                    value="full" 
+                    color={theme.primary}
+                    uncheckedColor={theme.subtext}
+                  />
+                  <Text style={[styles.radioLabel, { color: theme.text }]}>Full amount each</Text>
+                </View>
+              </RadioButton.Group>
+              <Divider style={[styles.divider, { backgroundColor: theme.divider }]} />
+              <View style={styles.splitWithHeader}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Split with</Text>
+                <Button 
+                  compact 
+                  mode="text" 
+                  onPress={selectAllParticipants}
+                  color={theme.primary}
+                >
+                  Select All
+                </Button>
+              </View>
+              {Array.isArray(participants) && participants.map(p => (
+                <View key={p._id || p.email} style={styles.checkboxItem}>
+                  <Checkbox 
+                    status={splitWith.includes(p.email) ? 'checked' : 'unchecked'} 
+                    onPress={() => toggleParticipantSelection(p.email)}
+                    color={theme.primary}
+                    uncheckedColor={theme.subtext}
+                  />
+                  <Text style={[styles.checkboxLabel, { color: theme.text }]}>
+                    {p.email === currentUser?.email ? 'You' : p.email}
+                  </Text>
+                </View>
+              ))}
+              <View style={styles.modalButtonsContainer}>
+                <Button 
+                  mode="outlined" 
+                  onPress={() => setModalVisible(false)} 
+                  style={styles.modalButton}
+                  color={theme.primary}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  mode="contained" 
+                  onPress={handleAddExpense} 
+                  style={styles.modalButton} 
+                  loading={loading}
+                  color={theme.primary}
+                >
+                  Save
+                </Button>
+              </View>
+            </ScrollView>
+          </Modal>
+        </Portal>
+
+        <Portal>
+          <Modal 
+            visible={expenseModalVisible} 
+            onDismiss={() => setExpenseModalVisible(false)} 
+            contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.modalBackground }]}
+          >
+            {selectedExpense && (
+              <ScrollView>
+                <Title style={[styles.modalTitle, { color: theme.text }]}>{selectedExpense.description}</Title>
+                <View style={styles.expenseDetailItem}>
+                  <Text style={[styles.expenseDetailLabel, { color: theme.subtext }]}>Amount:</Text>
+                  <Text style={[styles.expenseDetailValue, { color: theme.text }]}>{formatCurrency(selectedExpense.amount)}</Text>
+                </View>
+                <View style={styles.expenseDetailItem}>
+                  <Text style={[styles.expenseDetailLabel, { color: theme.subtext }]}>Date:</Text>
+                  <Text style={[styles.expenseDetailValue, { color: theme.text }]}>{formatDate(selectedExpense.date)}</Text>
+                </View>
+                <View style={styles.expenseDetailItem}>
+                  <Text style={[styles.expenseDetailLabel, { color: theme.subtext }]}>Paid by:</Text>
+                  <Text style={[styles.expenseDetailValue, { color: theme.text }]}>
+                    {selectedExpense.paidBy === currentUser?.email ? 'You' : selectedExpense.paidBy}
+                  </Text>
+                </View>
+                <Divider style={[styles.divider, { backgroundColor: theme.divider }]} />
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Split Details</Text>
+                {selectedExpense.splitWith && Array.isArray(selectedExpense.splitWith) && selectedExpense.splitWith.map((split, index) => (
+                  <View key={index} style={[styles.splitDetailItem, { borderBottomColor: theme.divider }]}>
+                    <Text style={[styles.splitDetailEmail, { color: theme.text }]}>
+                      {split.email === currentUser?.email ? 'You' : split.email}
+                    </Text>
+                    <Text style={[styles.splitDetailAmount, { color: theme.text }]}>{formatCurrency(split.amount)}</Text>
+                  </View>
+                ))}
+                <Button 
+                  mode="outlined" 
+                  onPress={() => setExpenseModalVisible(false)} 
+                  style={[styles.modalButton, { marginTop: 20 }]}
+                  color={theme.primary}
+                >
+                  Close
+                </Button>
+              </ScrollView>
             )}
-            <Button mode="outlined" onPress={() => setSummaryVisible(false)} style={[styles.modalButton, { marginTop: 20 }]}>Close</Button>
-          </ScrollView>
-        </Modal>
-      </Portal>
-    </SafeAreaView>
+          </Modal>
+        </Portal>
+
+        <Portal>
+          <Modal 
+            visible={summaryVisible} 
+            onDismiss={() => setSummaryVisible(false)} 
+            contentContainerStyle={[styles.modalContainer, { backgroundColor: theme.modalBackground }]}
+          >
+            <ScrollView>
+              <Title style={[styles.modalTitle, { color: theme.text }]}>Balance Summary</Title>
+              <FlatList
+                data={Array.isArray(participants) ? participants : []}
+                keyExtractor={item => item._id || item.email}
+                renderItem={renderSummaryItem}
+                scrollEnabled={false}
+                ListHeaderComponent={
+                  <Text style={[styles.summaryDescription, { color: theme.subtext }]}>Total owes and owed</Text>
+                }
+              />
+              {currentUser && balances[currentUser.email] && (
+                <>
+                  <Divider style={[styles.divider, { backgroundColor: theme.divider }]} />
+                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Your Balances</Text>
+                  {currentUser && balances[currentUser.email]?.owes && Object.keys(balances[currentUser.email]?.owes).length > 0 && (
+                    <>
+                      <Text style={[styles.balanceSubtitle, { color: theme.text }]}>You owe:</Text>
+                      {Object.entries(balances[currentUser.email]?.owes || {}).map(([person, amount]) => (
+                        <View key={`owe-${person}`} style={[styles.balanceItem, { borderBottomColor: theme.divider }]}>
+                          <Text style={[styles.balancePerson, { color: theme.text }]}>{person}</Text>
+                          <Text style={[styles.balanceAmount, styles.negative]}>{formatCurrency(amount)}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                  {currentUser && balances[currentUser.email]?.owed && Object.keys(balances[currentUser.email]?.owed).length > 0 && (
+                    <>
+                      <Text style={[styles.balanceSubtitle, { color: theme.text }]}>You are owed:</Text>
+                      {Object.entries(balances[currentUser.email]?.owed || {}).map(([person, amount]) => (
+                        <View key={`owed-${person}`} style={[styles.balanceItem, { borderBottomColor: theme.divider }]}>
+                          <Text style={[styles.balancePerson, { color: theme.text }]}>{person}</Text>
+                          <Text style={[styles.balanceAmount, styles.positive]}>{formatCurrency(amount)}</Text>
+                        </View>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+              <Button 
+                mode="outlined" 
+                onPress={() => setSummaryVisible(false)} 
+                style={[styles.modalButton, { marginTop: 20 }]}
+                color={theme.primary}
+              >
+                Close
+              </Button>
+            </ScrollView>
+          </Modal>
+        </Portal>
+      </SafeAreaView>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f8f8' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { color: 'red', fontSize: 16, marginBottom: 16 },
-  listContent: { padding: 16, paddingBottom: 80 },
-  fab: { position: 'absolute', margin: 16, right: 0, bottom: 0, backgroundColor: '#6200ea' },
-  modalContainer: { backgroundColor: 'white', padding: 20, margin: 20, borderRadius: 8, maxHeight: '80%' },
-  modalTitle: { fontSize: 20, marginBottom: 16, textAlign: 'center' },
-  input: { marginBottom: 16 },
-  radioItem: { flexDirection: 'row', alignItems: 'center', marginVertical: 4 },
-  radioLabel: { fontSize: 16 },
-  checkboxItem: { flexDirection: 'row', alignItems: 'center', marginVertical: 4 },
-  checkboxLabel: { fontSize: 16, marginLeft: 8 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginVertical: 8 },
-  divider: { marginVertical: 16 },
-  modalButtonsContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
-  modalButton: { flex: 1, marginHorizontal: 4 },
-  splitWithHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  expenseCard: { marginBottom: 8 },
-  expenseCardContent: { flexDirection: 'row', alignItems: 'center' },
-  expenseDateCol: { width: 60 },
-  expenseMainCol: { flex: 1, paddingHorizontal: 8 },
-  expenseAmountCol: { alignItems: 'flex-end' },
-  expenseDate: { fontSize: 12, color: '#666' },
-  expenseDescription: { fontSize: 16, fontWeight: 'bold' },
-  expensePaidBy: { fontSize: 12, color: '#666', marginTop: 4 },
-  expenseAmount: { fontSize: 16, fontWeight: 'bold' },
-  positive: { color: '#4CAF50' },
-  negative: { color: '#F44336' },
-  neutral: { color: '#9E9E9E' },
-  expenseDetailItem: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 8 },
-  expenseDetailLabel: { fontSize: 16, color: '#666' },
-  expenseDetailValue: { fontSize: 16, fontWeight: 'bold' },
-  splitDetailItem: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
-  splitDetailEmail: { fontSize: 14 },
-  splitDetailAmount: { fontSize: 14, fontWeight: 'bold' },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
-  emptyText: { fontSize: 18, fontWeight: 'bold', color: '#666' },
-  emptySubText: { fontSize: 14, color: '#888', marginTop: 8 },
-  summaryCard: { marginVertical: 4 },
-  summaryCardContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryUserInfo: {flexDirection: 'row',alignItems: 'center',},
-  summaryAvatar: {marginRight: 12,},
-  summaryUserEmail: {fontSize: 16,},
-  summaryBalance: {fontSize: 16,fontWeight: 'bold',},
-  summaryDescription: { fontSize: 14,color: '#666',marginBottom: 12,fontStyle: 'italic',},
-  balanceSubtitle: {fontSize: 16,fontWeight: 'bold',marginTop: 12,marginBottom: 8,},
-  balanceItem: {flexDirection: 'row',justifyContent: 'space-between',paddingVertical: 6,borderBottomWidth: 1,borderBottomColor: '#f0f0f0',},
-  balancePerson: {fontSize: 14,},
-  balanceAmount: {fontSize: 14,fontWeight: 'bold',},
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  container: {
+    flex: 1,
+    margin: 10,
+  },
+  mainheader: {
+    borderRadius: 24,
+  },
+  contentContainer: {
+    flex: 1,
+    // paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  listContainer: {
+    borderRadius: 24,
+    padding: 20,
+    flex: 1,
+  },
+  loadingContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    borderRadius: 24,
+  },
+  errorContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 20,
+    borderRadius: 24,
+  },
+  errorText: { 
+    fontSize: 16, 
+    marginBottom: 16,
+    fontFamily: 'Roboto',
+  },
+  listContent: { 
+    paddingBottom: 80 
+  },
+  fab: { 
+    position: 'absolute', 
+    margin: 16, 
+    right: 16, 
+    bottom: 16,
+    borderRadius: 30,
+    elevation: 6,
+  },
+  modalContainer: { 
+    padding: 20, 
+    margin: 20, 
+    borderRadius: 16, 
+    maxHeight: '80%' 
+  },
+  modalTitle: { 
+    fontSize: 20, 
+    marginBottom: 16, 
+    textAlign: 'center',
+    fontFamily: 'Roboto',
+  },
+  input: { 
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+  },
+  radioItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginVertical: 4 
+  },
+  radioLabel: { 
+    fontSize: 16,
+    fontFamily: 'Roboto',
+  },
+  checkboxItem: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginVertical: 4 
+  },
+  checkboxLabel: { 
+    fontSize: 16, 
+    marginLeft: 8,
+    fontFamily: 'Roboto',
+  },
+  sectionTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    marginVertical: 8,
+    fontFamily: 'Roboto',
+  },
+  divider: { 
+    marginVertical: 16 
+  },
+  modalButtonsContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginTop: 20 
+  },
+  modalButton: { 
+    flex: 1, 
+    marginHorizontal: 4 
+  },
+  splitWithHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center' 
+  },
+  expenseCard: { 
+    marginBottom: 8,
+    elevation: 2,
+    borderRadius: 12,
+  },
+  expenseCardContent: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  expenseDateCol: { 
+    width: 60 
+  },
+  expenseMainCol: { 
+    flex: 1, 
+    paddingHorizontal: 8 
+  },
+  expenseAmountCol: { 
+    alignItems: 'flex-end' 
+  },
+  expenseDate: { 
+    fontSize: 12,
+    fontFamily: 'Roboto',
+  },
+  expenseDescription: { 
+    fontSize: 16, 
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  expensePaidBy: { 
+    fontSize: 12, 
+    marginTop: 4,
+    fontFamily: 'Roboto',
+  },
+  expenseAmount: { 
+    fontSize: 16, 
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  positive: { 
+    color: '#4CAF50' 
+  },
+  negative: { 
+    color: '#F44336' 
+  },
+  neutral: { 
+    color: '#9E9E9E' 
+  },
+  expenseDetailItem: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginVertical: 8 
+  },
+  expenseDetailLabel: { 
+    fontSize: 16,
+    fontFamily: 'Roboto',
+  },
+  expenseDetailValue: { 
+    fontSize: 16, 
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  splitDetailItem: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    paddingVertical: 8, 
+    borderBottomWidth: 1,
+  },
+  splitDetailEmail: { 
+    fontSize: 14,
+    fontFamily: 'Roboto',
+  },
+  splitDetailAmount: { 
+    fontSize: 14, 
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  emptyContainer: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    paddingVertical: 40,
+    flex: 1,
+  },
+  emptyIcon: {
+    marginBottom: 16,
+  },
+  emptyText: { 
+    fontSize: 18, 
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  emptySubText: { 
+    fontSize: 14, 
+    marginTop: 8,
+    fontFamily: 'Roboto',
+  },
+  summaryCard: { 
+    marginVertical: 4,
+    elevation: 2,
+    borderRadius: 12,
+  },
+  summaryCardContent: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center' 
+  },
+  summaryUserInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  summaryAvatar: {
+    marginRight: 12,
+  },
+  summaryUserEmail: {
+    fontSize: 16,
+    fontFamily: 'Roboto',
+  },
+  summaryBalance: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  summaryDescription: { 
+    fontSize: 14,
+    marginBottom: 12,
+    fontStyle: 'italic',
+    fontFamily: 'Roboto',
+  },
+  balanceSubtitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 12,
+    marginBottom: 8,
+    fontFamily: 'Roboto',
+  },
+  balanceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+  },
+  balancePerson: {
+    fontSize: 14,
+    fontFamily: 'Roboto',
+  },
+  balanceAmount: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
 });
 
 export default BillingScreen;

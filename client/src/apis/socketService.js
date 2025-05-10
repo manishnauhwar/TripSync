@@ -134,6 +134,33 @@ class SocketService {
     }
   }
 
+  // Delete a message
+  deleteMessage(tripId, messageId, deleteForEveryone = false) {
+    if (this.isConnected && this.socket) {
+      console.log('Emitting delete-message via socket:', { tripId, messageId, deleteForEveryone });
+      this.socket.emit('delete-message', {
+        tripId,
+        messageId,
+        deleteForEveryone
+      });
+      return true;
+    } else {
+      console.log('Socket not connected, cannot delete message');
+      // Try to reconnect and send
+      this.connect().then(connected => {
+        if (connected) {
+          this.socket.emit('delete-message', {
+            tripId,
+            messageId,
+            deleteForEveryone
+          });
+          return true;
+        }
+        return false;
+      });
+    }
+  }
+
   // Start typing indicator
   sendTyping(tripId) {
     if (this.isConnected && this.socket) {

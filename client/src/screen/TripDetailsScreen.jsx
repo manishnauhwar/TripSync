@@ -7,12 +7,20 @@ import {
   ScrollView,
   ActivityIndicator,
   FlatList,
-  Alert
+  Alert,
+  ImageBackground,
+  StatusBar,
+  useColorScheme,
+  Dimensions
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Appbar, Card, Button, Menu, Divider, Avatar } from 'react-native-paper';
+import { Appbar, Card, Button, Menu, Divider, Avatar, IconButton } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../apis/api';
+import { LinearGradient } from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+
+const { width, height } = Dimensions.get('window');
 
 const TripDetailsScreen = ({ route, navigation }) => {
   const { tripId } = route.params;
@@ -22,6 +30,20 @@ const TripDetailsScreen = ({ route, navigation }) => {
   const [menuVisible, setMenuVisible] = useState({});
   const [userRole, setUserRole] = useState(null);
   const [currentUserEmail, setCurrentUserEmail] = useState(null);
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
+
+  const theme = {
+    background: isDarkMode ? 'rgba(18, 18, 18, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+    text: isDarkMode ? '#FFFFFF' : '#333333',
+    cardBackground: isDarkMode ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+    subtext: isDarkMode ? '#AAAAAA' : '#666666',
+    primary: '#2E7D32',
+    accent: '#03DAC6',
+    error: '#CF6679',
+    divider: isDarkMode ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)',
+    pending: isDarkMode ? '#E7A600' : '#FF9800',
+  };
 
   useEffect(() => {
     fetchTripDetails();
@@ -45,6 +67,8 @@ const TripDetailsScreen = ({ route, navigation }) => {
         setTrip(response.data.data);
         
         const userData = await AsyncStorage.getItem('userDetails');
+        const token = await AsyncStorage.getItem('token');
+        console.log('User token:', token);
         console.log('User data from storage:', userData);
         
         if (userData) {
@@ -182,8 +206,13 @@ const TripDetailsScreen = ({ route, navigation }) => {
     const roleDisplay = getParticipantRoleDisplay(item);
     
     return (
-      <Card style={styles.participantCard}>
-        <Card.Content>
+      <LinearGradient
+        colors={['rgba(98, 0, 234, 0.1)', 'rgba(3, 218, 198, 0.1)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.participantGradient}
+      >
+        <View style={[styles.participantCard, { backgroundColor: theme.cardBackground }]}>
           <View style={styles.participantHeader}>
             <View style={styles.participantInfo}>
               <Avatar.Text 
@@ -192,9 +221,9 @@ const TripDetailsScreen = ({ route, navigation }) => {
                 style={[styles.avatar, { backgroundColor: getAvatarColor(item) }]}
               />
               <View style={styles.participantDetails}>
-                <Text style={styles.participantName}>{item.email}</Text>
+                <Text style={[styles.participantName, { color: theme.text }]}>{item.email}</Text>
                 {roleDisplay && (
-                  <Text style={styles.participantRole}>{roleDisplay}</Text>
+                  <Text style={[styles.participantRole, { color: theme.subtext }]}>{roleDisplay}</Text>
                 )}
               </View>
             </View>
@@ -208,6 +237,7 @@ const TripDetailsScreen = ({ route, navigation }) => {
                     mode="text" 
                     onPress={() => showRoleMenu(item._id)}
                     style={styles.roleButton}
+                    textColor={theme.primary}
                   >
                     Change Role
                   </Button>
@@ -224,260 +254,344 @@ const TripDetailsScreen = ({ route, navigation }) => {
               </Menu>
             )}
           </View>
-        </Card.Content>
-      </Card>
+        </View>
+      </LinearGradient>
     );
   };
 
+  const handleItineraryPress = () => {
+    navigation.navigate('Itinerary', { 
+      tripId, 
+      tripName: trip?.name, 
+      startDate: trip?.startDate, 
+      endDate: trip?.endDate 
+    });
+  };
+
+  const handleChatPress = () => {
+    navigation.navigate('Chat', { tripId, tripName: trip?.name });
+  };
+
+  const handleBillingPress = () => {
+    navigation.navigate('Billing', { 
+      tripId, 
+      tripName: trip?.name, 
+      participants: trip?.participants.filter(p => p.status === 'accepted') || [] 
+    });
+  };
+
+  const handleDocumentsPress = () => {
+    navigation.navigate('Documents', { tripId, tripName: trip?.name });
+  };
+
+  const goBack = () => {
+    navigation.goBack();
+  };
+
+  const actionButtons = [
+    {
+      icon: 'file-document-multiple',
+      label: 'Documents',
+      onPress: handleDocumentsPress
+    },
+    {
+      icon: 'calendar',
+      label: 'Itinerary',
+      onPress: handleItineraryPress
+    },
+    {
+      icon: 'chat',
+      label: 'Chat',
+      onPress: handleChatPress
+    },
+    {
+      icon: 'cash-multiple',
+      label: 'Billing',
+      onPress: handleBillingPress
+    },
+  ];
+
+  const renderActionButton = ({ item }) => (
+    <TouchableOpacity
+      style={[styles.actionButton, { backgroundColor: theme.primary }]}
+      onPress={item.onPress}
+    >
+      <Icon name={item.icon} color="#FFF" size={24} />
+      <Text style={styles.actionButtonText}>{item.label}</Text>
+    </TouchableOpacity>
+  );
+
   if (loading && !trip) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Appbar.Header>
-          <Appbar.BackAction onPress={() => navigation.goBack()} />
-          <Appbar.Content title="Trip Details" />
-        </Appbar.Header>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6200ea" />
-        </View>
-      </SafeAreaView>
+      <ImageBackground
+        source={require('../assets/images/3.jpg')}
+        style={styles.backgroundImage}
+      >
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor="transparent"
+          translucent
+        />
+        <SafeAreaView style={styles.container}>
+          <View style={[styles.header, { backgroundColor: theme.background }]}>
+            <View style={styles.headerContent}>
+              <IconButton
+                icon="arrow-left"
+                size={24}
+                color={theme.text}
+                onPress={goBack}
+              />
+              <Text style={[styles.headerTitle, { color: theme.text }]}>Trip Details</Text>
+              <View style={{ width: 40 }} />
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
   if (error && !trip) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Appbar.Header>
-          <Appbar.BackAction onPress={() => navigation.goBack()} />
-          <Appbar.Content title="Trip Details" />
-        </Appbar.Header>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Button mode="contained" onPress={fetchTripDetails}>Retry</Button>
-        </View>
-      </SafeAreaView>
+      <ImageBackground
+        source={require('../assets/images/3.jpg')}
+        style={styles.backgroundImage}
+      >
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor="transparent"
+          translucent
+        />
+        <SafeAreaView style={styles.container}>
+          <View style={[styles.header, { backgroundColor: theme.background }]}>
+            <View style={styles.headerContent}>
+              <IconButton
+                icon="arrow-left"
+                size={24}
+                color={theme.text}
+                onPress={goBack}
+              />
+              <Text style={[styles.headerTitle, { color: theme.text }]}>Trip Details</Text>
+              <View style={{ width: 40 }} />
+            </View>
+          </View>
+          <View style={styles.errorContainer}>
+            <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>
+            <Button 
+              mode="contained" 
+              onPress={fetchTripDetails}
+              buttonColor={theme.primary}
+            >
+              Retry
+            </Button>
+          </View>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
 
   const acceptedParticipants = trip?.participants.filter(p => p.status === 'accepted') || [];
+  const pendingParticipants = trip?.participants.filter(p => p.status === 'invited') || [];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Appbar.Header>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title={trip?.name || 'Trip Details'} />
-      </Appbar.Header>
-
-      {loading && (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" />
-        </View>
-      )}
-
-      {!loading && error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-
-      {!loading && !error && trip && (
-        <ScrollView style={styles.scrollView}>
-          
-          {/* Trip Actions Buttons */}
-          <View style={styles.actionButtonsContainer}>
-            <Button 
-              mode="contained" 
-              icon="calendar" 
-              style={styles.actionButton}
-              onPress={() => {
-                console.log('Navigating to Itinerary with params:', {
-                  tripId: trip._id,
-                  tripName: trip.name,
-                  startDate: trip.startDate,
-                  endDate: trip.endDate
-                });
-                navigation.navigate('Itinerary', { 
-                  tripId: trip._id,
-                  tripName: trip.name,
-                  startDate: trip.startDate,
-                  endDate: trip.endDate
-                });
-              }}
-            >
-              Itinerary
-            </Button>
-            
-            <Button 
-              mode="contained" 
-              icon="chat" 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('Chat', { 
-                tripId: trip._id,
-                tripName: trip.name
-              })}
-            >
-              Chat
-            </Button>
-
-            <Button 
-              mode="contained" 
-              icon="cash-multiple" 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('Billing', { 
-                tripId: trip._id,
-                tripName: trip.name,
-                participants: trip.participants.filter(p => p.status === 'accepted')
-              })}
-            >
-              Billing
-            </Button>
+    <ImageBackground
+      source={require('../assets/images/3.jpg')}
+      style={styles.backgroundImage}
+    >
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
+      <SafeAreaView style={styles.container}>
+        <View style={[styles.header, { backgroundColor: theme.background }]}>
+          <View style={styles.headerContent}>
+            <IconButton
+              icon="arrow-left"
+              size={24}
+              color={theme.text}
+              onPress={goBack}
+            />
+            <Text style={[styles.headerTitle, { color: theme.text }]}>{trip?.name || 'Trip Details'}</Text>
+            <View style={{ width: 40 }} />
           </View>
-          
-          {/* Trip Details Card */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text style={styles.sectionTitle}>Trip Details</Text>
-              
-              {trip.description && (
-                <Text style={styles.description}>{trip.description}</Text>
-              )}
-              
-              <View style={styles.dateContainer}>
-                <View style={styles.dateItem}>
-                  <Text style={styles.dateLabel}>Start Date</Text>
-                  <Text style={styles.dateValue}>
-                    {formatDate(trip.startDate)}
-                  </Text>
+        </View>
+
+        {loading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        )}
+
+        <View style={styles.contentContainer}>
+          <View style={[styles.contentWrapper, { backgroundColor: theme.background }]}>
+            {!loading && !error && trip && (
+              <ScrollView 
+                style={styles.scrollView}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Horizontally scrollable action buttons */}
+                <View style={styles.actionButtonsSection}>
+                  <FlatList
+                    data={actionButtons}
+                    renderItem={renderActionButton}
+                    keyExtractor={(item) => item.label}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.actionButtonsContainer}
+                  />
                 </View>
                 
-                <View style={styles.dateItem}>
-                  <Text style={styles.dateLabel}>End Date</Text>
-                  <Text style={styles.dateValue}>
-                    {formatDate(trip.endDate)}
-                  </Text>
-                </View>
-              </View>
-            </Card.Content>
-          </Card>
-          
-          {/* Participants Section */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <View style={styles.participantsHeader}>
-                <Text style={styles.sectionTitle}>Participants</Text>
-                <Button 
-                  mode="outlined" 
-                  onPress={handleInviteParticipants}
-                  style={styles.inviteButton}
-                >
-                  Invite
-                </Button>
-              </View>
-              
-              {trip.participants.filter(p => p.status === 'accepted').length === 0 ? (
-                <Text style={styles.emptyText}>No participants yet</Text>
-              ) : (
-                trip.participants.filter(p => p.status === 'accepted').map(participant => (
-                  <View key={participant._id} style={styles.participantRow}>
-                    <View style={styles.participantInfo}>
-                      <Avatar.Text 
-                        size={40} 
-                        label={getInitials(participant.email)} 
-                        style={[styles.avatar, { backgroundColor: getAvatarColor(participant) }]}
-                      />
-                      <View style={styles.participantDetails}>
-                        <Text style={styles.participantEmail}>{participant.email}</Text>
-                        {getParticipantRoleDisplay(participant) && (
-                          <Text style={styles.participantRole}>
-                            {getParticipantRoleDisplay(participant)}
-                          </Text>
-                        )}
-                      </View>
+                {/* Trip Details Card */}
+                <View style={[styles.card, { backgroundColor: theme.cardBackground }]}>
+                  <Text style={[styles.sectionTitle, { color: theme.text }]}>Trip Details</Text>
+                  
+                  {trip.description && (
+                    <Text style={[styles.description, { color: theme.subtext }]}>{trip.description}</Text>
+                  )}
+                  
+                  <View style={styles.dateContainer}>
+                    <View style={styles.dateItem}>
+                      <Text style={[styles.dateLabel, { color: theme.text }]}>Start Date</Text>
+                      <Text style={[styles.dateValue, { color: theme.subtext }]}>
+                        {formatDate(trip.startDate)}
+                      </Text>
                     </View>
                     
-                    {userRole === 'admin' && participant.email !== currentUserEmail && (
-                      <Menu
-                        visible={menuVisible[participant._id]}
-                        onDismiss={() => hideRoleMenu(participant._id)}
-                        anchor={
-                          <Button 
-                            mode="text" 
-                            onPress={() => showRoleMenu(participant._id)}
-                          >
-                            Role
-                          </Button>
-                        }
-                      >
-                        <Menu.Item 
-                          title="Editor"
-                          onPress={() => changeParticipantRole(participant._id, 'editor')}
-                        />
-                        <Menu.Item 
-                          title="Viewer"
-                          onPress={() => changeParticipantRole(participant._id, 'viewer')}
-                        />
-                      </Menu>
-                    )}
-                  </View>
-                ))
-              )}
-            </Card.Content>
-          </Card>
-          
-          {/* Pending Invitations Section */}
-          {trip.participants.filter(p => p.status === 'invited').length > 0 && (
-            <Card style={styles.card}>
-              <Card.Content>
-                <Text style={styles.sectionTitle}>Pending Invitations</Text>
-                
-                {trip.participants.filter(p => p.status === 'invited').map(participant => (
-                  <View key={participant._id} style={styles.participantRow}>
-                    <View style={styles.participantInfo}>
-                      <Avatar.Text 
-                        size={40} 
-                        label={getInitials(participant.email)} 
-                        style={styles.pendingAvatar}
-                      />
-                      <View style={styles.participantDetails}>
-                        <Text style={styles.participantEmail}>{participant.email}</Text>
-                        <Text style={styles.pendingStatus}>Awaiting response</Text>
-                      </View>
+                    <View style={styles.dateItem}>
+                      <Text style={[styles.dateLabel, { color: theme.text }]}>End Date</Text>
+                      <Text style={[styles.dateValue, { color: theme.subtext }]}>
+                        {formatDate(trip.endDate)}
+                      </Text>
                     </View>
                   </View>
-                ))}
-              </Card.Content>
-            </Card>
-          )}
-        </ScrollView>
-      )}
-    </SafeAreaView>
+                </View>
+                
+                {/* Participants Section */}
+                <View style={[styles.card, { backgroundColor: theme.cardBackground }]}>
+                  <View style={styles.participantsHeader}>
+                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Participants</Text>
+                    <Button 
+                      mode="contained" 
+                      onPress={handleInviteParticipants}
+                      buttonColor={theme.primary}
+                      textColor="#FFF"
+                      style={styles.inviteButton}
+                    >
+                      Invite
+                    </Button>
+                  </View>
+                  
+                  {acceptedParticipants.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                      <Icon name="account-group" size={48} color={theme.subtext} style={styles.emptyIcon} />
+                      <Text style={[styles.emptyText, { color: theme.subtext }]}>No participants yet</Text>
+                    </View>
+                  ) : (
+                    <FlatList
+                      data={acceptedParticipants}
+                      renderItem={renderParticipant}
+                      keyExtractor={item => item._id}
+                      scrollEnabled={false}
+                    />
+                  )}
+                </View>
+                
+                {/* Pending Invitations Section */}
+                {pendingParticipants.length > 0 && (
+                  <View style={[styles.card, { backgroundColor: theme.cardBackground }]}>
+                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Pending Invitations</Text>
+                    
+                    {pendingParticipants.map(participant => (
+                      <View key={participant._id} style={styles.pendingItem}>
+                        <View style={styles.participantInfo}>
+                          <Avatar.Text 
+                            size={40} 
+                            label={getInitials(participant.email)} 
+                            backgroundColor={theme.pending}
+                            color="#fff"
+                          />
+                          <View style={styles.participantDetails}>
+                            <Text style={[styles.participantEmail, { color: theme.text }]}>{participant.email}</Text>
+                            <View style={styles.pendingStatusContainer}>
+                              <Icon name="clock-outline" size={16} color={theme.pending} />
+                              <Text style={[styles.pendingStatus, { color: theme.pending }]}>Awaiting response</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </SafeAreaView>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
   },
-  mainContainer: {
+  header: {
+    paddingTop: 16,
+    paddingBottom: 16,
+    margin: 16,
+    borderRadius: 30,
+    // borderBottomLeftRadius: 30,
+    // borderBottomRightRadius: 30,
+    // marginBottom: 16,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
     flex: 1,
+    textAlign: 'center',
+    fontFamily: 'Roboto',
   },
   contentContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  contentWrapper: {
+    flex: 1,
+    borderRadius: 24,
     padding: 16,
+  },
+  scrollView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingIndicator: {
+  loadingOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    paddingVertical: 8,
+    bottom: 0,
+    justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    zIndex: 1000,
   },
   errorContainer: {
     flex: 1,
@@ -486,81 +600,85 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
-    color: 'red',
     fontSize: 16,
     marginBottom: 16,
+    textAlign: 'center',
+    fontFamily: 'Roboto',
   },
-  infoCard: {
-    marginBottom: 20,
+  actionButtonsSection: {
+    marginBottom: 16,
+  },
+  actionButtonsContainer: {
+    paddingVertical: 8,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 30,
+    marginRight: 12,
     elevation: 2,
-    borderRadius: 8,
-    overflow: 'hidden',
   },
-  tripName: {
-    fontSize: 22,
+  actionButtonText: {
+    color: '#FFF',
+    marginLeft: 8,
     fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#212121',
+    fontFamily: 'Roboto',
   },
-  tripDescription: {
-    fontSize: 16,
-    color: '#555',
+  card: {
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 16,
-    lineHeight: 22,
-  },
-  divider: {
-    marginVertical: 12,
-    height: 1,
-    backgroundColor: '#e0e0e0',
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  dateLabel: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    width: 100,
-    color: '#424242',
-  },
-  dateValue: {
-    fontSize: 15,
-    color: '#444',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#212121',
+    marginBottom: 16,
+    fontFamily: 'Roboto',
   },
-  participantCount: {
-    fontSize: 14,
-    color: '#666',
-    backgroundColor: '#f1f1f1',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+  description: {
+    fontSize: 16,
+    marginBottom: 16,
+    lineHeight: 22,
+    fontFamily: 'Roboto',
   },
-  participantsList: {
-    flex: 1,
+  dateContainer: {
+    marginBottom: 8,
+  },
+  dateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  dateLabel: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
+  },
+  dateValue: {
+    fontSize: 15,
+    fontFamily: 'Roboto',
+  },
+  participantsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  inviteButton: {
+    borderRadius: 30,
+  },
+  participantGradient: {
+    marginBottom: 12,
+    borderRadius: 16,
+    padding: 1,
   },
   participantCard: {
-    marginHorizontal: 16,
-    marginBottom: 10,
-    elevation: 1,
-    borderRadius: 8,
-    overflow: 'hidden',
-    borderLeftWidth: 3,
-    borderLeftColor: '#6200ea',
+    borderRadius: 15,
+    padding: 12,
   },
   participantHeader: {
     flexDirection: 'row',
@@ -570,6 +688,7 @@ const styles = StyleSheet.create({
   participantInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   avatar: {
     marginRight: 12,
@@ -580,90 +699,53 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#212121',
+    fontFamily: 'Roboto',
   },
-  roleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
+  participantEmail: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
   },
   participantRole: {
     fontSize: 13,
     fontWeight: '500',
     marginTop: 2,
+    fontFamily: 'Roboto',
   },
   roleButton: {
     marginVertical: 0,
     borderRadius: 4,
   },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyIcon: {
+    marginBottom: 8,
+  },
   emptyText: {
     textAlign: 'center',
     fontSize: 16,
-    color: '#666',
-    padding: 20,
-    fontStyle: 'italic',
+    fontFamily: 'Roboto',
   },
-  inviteButton: {
-    margin: 16,
-    marginTop: 8,
-    backgroundColor: '#6200ea',
-    borderRadius: 8,
-    elevation: 2,
-  },
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    marginVertical: 15,
-    marginHorizontal: 10
-  },
-  actionButton: {
-    flex: 1,
-    marginHorizontal: 5
-  },
-  card: {
-    marginBottom: 20,
-    elevation: 2,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  description: {
-    fontSize: 16,
-    color: '#555',
-    marginBottom: 16,
-    lineHeight: 22,
-  },
-  dateItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  participantsHeader: {
+  pendingItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 152, 0, 0.1)',
   },
-  participantRow: {
+  pendingStatusContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  participantEmail: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#212121',
-  },
-  pendingAvatar: {
-    marginRight: 12,
-    backgroundColor: '#9e9e9e',
+    marginTop: 4,
   },
   pendingStatus: {
     fontSize: 13,
-    color: '#666',
+    marginLeft: 4,
+    fontFamily: 'Roboto',
   },
 });
 

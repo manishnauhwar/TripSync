@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ActivityIndicator, 
+  Linking, 
+  ImageBackground,
+  StatusBar,
+  useColorScheme
+} from 'react-native';
 import { Button } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'react-native-linear-gradient';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import api from '../apis/api';
 
 const InvitationHandlerScreen = () => {
@@ -13,17 +24,26 @@ const InvitationHandlerScreen = () => {
   const [error, setError] = useState(null);
   const [invitationData, setInvitationData] = useState(null);
   const [userLoggedIn, setUserLoggedIn] = useState(false);
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
+  
+  const theme = {
+    background: isDarkMode ? 'rgba(18, 18, 18, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+    text: isDarkMode ? '#FFFFFF' : '#333333',
+    cardBackground: isDarkMode ? 'rgba(30, 30, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+    subtext: isDarkMode ? '#AAAAAA' : '#666666',
+    primary: '#6200ea',
+    accent: '#03DAC6',
+    error: '#CF6679',
+  };
   
   const { tripId, email } = route.params || {};
   
   useEffect(() => {
-    console.log('InvitationHandler mounted - params:', { tripId, email });
-    
     const checkUserStatus = async () => {
       try {
         const token = await AsyncStorage.getItem('token');
         setUserLoggedIn(!!token);
-        console.log('User logged in status:', !!token);
       } catch (err) {
         console.error('Error checking authentication:', err);
       }
@@ -34,29 +54,25 @@ const InvitationHandlerScreen = () => {
   
   useEffect(() => {
     if (tripId && email) {
-      console.log('Handling invitation with tripId and email:', { tripId, email });
       handleInvitation();
     } else {
-      console.log('Missing tripId or email, checking URL...');
       Linking.getInitialURL().then(url => {
         if (url) {
-          console.log('Got URL from Linking:', url);
           const params = extractParamsFromUrl(url);
           if (params.tripId && params.email) {
-            console.log('Extracted params from URL:', params);
             navigation.setParams(params);
           } else {
             setLoading(false);
-            setError('Invalid invitation link. Missing trip ID or email.');
+            setError('Invalid invitation link');
           }
         } else {
           setLoading(false);
-          setError('Invalid invitation link. Missing trip ID or email.');
+          setError('Invalid invitation link');
         }
       }).catch(err => {
         console.error('Error getting initial URL:', err);
         setLoading(false);
-        setError('Failed to process invitation link.');
+        setError('Failed to process invitation link');
       });
     }
   }, [tripId, email]);
@@ -64,15 +80,10 @@ const InvitationHandlerScreen = () => {
   const extractParamsFromUrl = (url) => {
     const params = {};
     try {
-      const match = url.match(/invite\?(.*)$/);
-      if (match && match[1]) {
-        const queryParams = match[1].split('&');
-        queryParams.forEach(param => {
-          const [key, value] = param.split('=');
-          if (key && value) {
-            params[key] = key === 'email' ? decodeURIComponent(value) : value;
-          }
-        });
+      const match = url.match(/invite\/([^\/]+)\/([^\/]+)$/);
+      if (match && match[1] && match[2]) {
+        params.tripId = match[1];
+        params.email = decodeURIComponent(match[2]);
       }
     } catch (error) {
       console.error('Error parsing URL parameters:', error);
@@ -85,19 +96,15 @@ const InvitationHandlerScreen = () => {
     setError(null);
     
     try {
-      console.log('Accepting invitation:', { tripId, email });
       const response = await api.acceptInvitation(tripId, email);
-      console.log('Invitation response:', response);
       
       if (response.success) {
         setInvitationData(response.data);
         
         if (response.data.requiresAuth && !userLoggedIn) {
-          console.log('Auth required, storing pending invitation data');
           await AsyncStorage.setItem('pendingInvitationEmail', email);
           await AsyncStorage.setItem('pendingInvitationTripId', tripId);
         } else {
-          console.log('User logged in, navigating to trip details');
           navigation.reset({
             index: 1,
             routes: [
@@ -111,7 +118,7 @@ const InvitationHandlerScreen = () => {
       }
     } catch (err) {
       console.error('Invitation handling error:', err);
-      setError('Failed to process invitation. Please try again.');
+      setError('Failed to process invitation');
     } finally {
       setLoading(false);
     }
@@ -125,147 +132,220 @@ const InvitationHandlerScreen = () => {
     navigation.navigate('Signup', { redirectAfter: 'pendingInvitation', email });
   };
   
-  const downloadApp = async () => {
-    try {
-      const downloadUrl = 'https://yourhost.com/download/tripsync.apk'; 
-      await Linking.openURL(downloadUrl);
-    } catch (error) {
-      console.error('Failed to open download link:', error);
-      setError('Could not open download link. Please try again.');
-    }
-  };
-  
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6200ea" />
-          <Text style={styles.loadingText}>Processing invitation...</Text>
-        </View>
-      </SafeAreaView>
+      <ImageBackground
+        source={require('../assets/images/1.jpg')}
+        style={styles.backgroundImage}
+      >
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor="transparent"
+          translucent
+        />
+        <SafeAreaView style={styles.container}>
+          <View style={[styles.loadingCard, { backgroundColor: theme.background }]}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[styles.loadingText, { color: theme.text }]}>Processing invitation...</Text>
+          </View>
+        </SafeAreaView>
+      </ImageBackground>
     );
   }
   
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Trip Invitation</Text>
-        
-        {error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Button 
-              mode="contained" 
-              onPress={() => navigation.navigate('Dashboard')}
-              style={styles.button}
-            >
-              Go to Dashboard
-            </Button>
+    <ImageBackground
+      source={require('../assets/images/1.jpg')}
+      style={styles.backgroundImage}
+    >
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent
+      />
+      <SafeAreaView style={styles.container}>
+        <View style={[styles.contentCard, { backgroundColor: theme.background }]}>
+          <View style={styles.headerSection}>
+            <Icon name="airplane" size={36} color={theme.primary} style={styles.headerIcon} />
+            <Text style={[styles.title, { color: theme.text }]}>Trip Invitation</Text>
           </View>
-        ) : invitationData?.requiresAuth ? (
-          <View style={styles.actionContainer}>
-            <Text style={styles.message}>
-              You've been invited to join "{invitationData.tripName}"
-            </Text>
-            <Text style={styles.subMessage}>
-              Please log in or create an account to view this trip.
-            </Text>
-            <Button 
-              mode="contained" 
-              onPress={navigateToLogin}
-              style={[styles.button, styles.loginButton]}
-            >
-              Log In
-            </Button>
-            <Button 
-              mode="outlined" 
-              onPress={navigateToSignup}
-              style={styles.button}
-            >
-              Create Account
-            </Button>
-          </View>
-        ) : (
-          <View style={styles.successContainer}>
-            <Text style={styles.message}>
-              Successfully joined "{invitationData?.tripName}"
-            </Text>
-            <Button 
-              mode="contained" 
-              onPress={() => navigation.navigate('TripDetails', { tripId })}
-              style={styles.button}
-            >
-              View Trip
-            </Button>
-          </View>
-        )}
-      </View>
-    </SafeAreaView>
+          
+          {error ? (
+            <View style={styles.messageContainer}>
+              <Icon name="alert-circle" size={48} color={theme.error} style={styles.statusIcon} />
+              <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>
+            </View>
+          ) : invitationData?.requiresAuth ? (
+            <View style={styles.messageContainer}>
+              <Icon name="email-check" size={48} color={theme.primary} style={styles.statusIcon} />
+              <Text style={[styles.message, { color: theme.text }]}>
+                You've been invited to join "{invitationData.tripName}"
+              </Text>
+              <Text style={[styles.subMessage, { color: theme.subtext }]}>
+                Please log in or create an account to view this trip.
+              </Text>
+              <LinearGradient
+                colors={['rgba(98, 0, 234, 0.8)', 'rgba(3, 218, 198, 0.8)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.buttonGradient}
+              >
+                <Button 
+                  mode="contained" 
+                  onPress={navigateToLogin}
+                  style={styles.gradientButton}
+                  labelStyle={styles.buttonLabel}
+                >
+                  Log In
+                </Button>
+              </LinearGradient>
+              <Button 
+                mode="outlined" 
+                onPress={navigateToSignup}
+                style={[styles.outlinedButton, { borderColor: theme.primary }]}
+                labelStyle={[styles.outlinedButtonLabel, { color: theme.primary }]}
+              >
+                Create Account
+              </Button>
+            </View>
+          ) : (
+            <View style={styles.messageContainer}>
+              <Icon name="check-circle" size={48} color={theme.accent} style={styles.statusIcon} />
+              <Text style={[styles.message, { color: theme.text }]}>
+                Successfully joined "{invitationData?.tripName}"
+              </Text>
+              <LinearGradient
+                colors={['rgba(98, 0, 234, 0.8)', 'rgba(3, 218, 198, 0.8)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.buttonGradient}
+              >
+                <Button 
+                  mode="contained" 
+                  onPress={() => navigation.navigate('TripDetails', { tripId })}
+                  style={styles.gradientButton}
+                  labelStyle={styles.buttonLabel}
+                >
+                  View Trip
+                </Button>
+              </LinearGradient>
+            </View>
+          )}
+        </View>
+      </SafeAreaView>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#f8f8f8',
-  },
-  loadingContainer: {
-    flex: 1,
+    padding: 16,
     justifyContent: 'center',
+  },
+  loadingCard: {
+    padding: 24,
+    borderRadius: 24,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 24,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
   loadingText: {
     marginTop: 16,
-    fontSize: 16,
-    color: '#666',
+    fontSize: 18,
+    fontFamily: 'Roboto',
+    textAlign: 'center',
   },
-  content: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
+  contentCard: {
+    padding: 24,
+    borderRadius: 24,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  headerSection: {
     alignItems: 'center',
+    marginBottom: 24,
+  },
+  headerIcon: {
+    marginBottom: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#6200ea',
-  },
-  errorContainer: {
-    alignItems: 'center',
-  },
-  errorText: {
-    color: 'red',
-    fontSize: 16,
-    marginBottom: 20,
     textAlign: 'center',
+    fontFamily: 'Tagesschrift',
   },
-  actionContainer: {
-    width: '100%',
+  messageContainer: {
     alignItems: 'center',
+    paddingVertical: 16,
   },
-  successContainer: {
-    alignItems: 'center',
+  statusIcon: {
+    marginBottom: 16,
   },
   message: {
-    fontSize: 18,
-    marginBottom: 20,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
     textAlign: 'center',
+    fontFamily: 'Roboto',
   },
   subMessage: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
+    fontSize: 16,
+    marginBottom: 24,
     textAlign: 'center',
+    fontFamily: 'Roboto',
   },
-  button: {
-    marginTop: 10,
+  errorText: {
+    fontSize: 16,
+    marginBottom: 24,
+    textAlign: 'center',
+    fontFamily: 'Roboto',
+  },
+  buttonGradient: {
+    borderRadius: 30,
     width: '100%',
-    paddingVertical: 6,
+    marginVertical: 8,
+    elevation: 4,
   },
-  loginButton: {
-    backgroundColor: '#6200ea',
+  gradientButton: {
+    height: 50,
+    justifyContent: 'center',
+    borderRadius: 30,
+    backgroundColor: 'transparent',
+    elevation: 0,
+  },
+  buttonLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontFamily: 'Roboto',
+  },
+  outlinedButton: {
+    marginTop: 12,
+    width: '100%',
+    height: 50,
+    justifyContent: 'center',
+    borderRadius: 30,
+    borderWidth: 2,
+  },
+  outlinedButtonLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Roboto',
   },
 });
 
-export default InvitationHandlerScreen; 
+export default InvitationHandlerScreen;

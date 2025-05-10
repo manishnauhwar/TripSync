@@ -134,3 +134,9 @@ dependencies {
     implementation 'com.google.android.gms:play-services-maps:18.0.2'
 }
 apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
+
+afterEvaluate {
+    tasks.named("generateDebugLintReportModel").configure {
+        dependsOn tasks.named("copyReactNativeVectorIconFonts")
+    }
+}

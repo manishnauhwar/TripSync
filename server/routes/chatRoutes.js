@@ -3,7 +3,8 @@ import {
   getMessages,
   sendMessage,
   markMessagesAsRead,
-  uploadFile
+  uploadFile,
+  deleteMessage
 } from '../controllers/chatController.js';
 import { authenticateUser } from '../middleware/authMiddleware.js';
 import multer from 'multer';
@@ -81,6 +82,7 @@ router.use(authenticateUser);
 router.get('/messages/:tripId', getMessages);
 router.post('/messages/:tripId', sendMessage);
 router.put('/messages/:tripId/read', markMessagesAsRead);
+router.delete('/messages/:tripId/:messageId', deleteMessage);
 
 // File upload route
 router.post('/upload', upload.single('file'), uploadFile);

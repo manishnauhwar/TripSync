@@ -34,8 +34,14 @@ const safeDBOperation = async (operation) => {
     // Check if database module is available
     let database;
     try {
-      const { database: db } = require('../models');
-      database = db;
+      // Fix: Use correct import path and handle potential errors
+      const dbModule = require('../models/database');
+      database = dbModule.database;
+      
+      if (!database) {
+        console.error('Database not found in module');
+        return { success: false, error: 'Database not available' };
+      }
     } catch (error) {
       console.error('Database module not available:', error);
       return { success: false, error: 'Database not available' };
@@ -220,7 +226,7 @@ const offlineApi = {
       const dbResult = await safeDBOperation(async (database) => {
         // First check by server ID
         let trip = await database.get('trips').query(
-          database.Q.where('server_id', tripId)
+          Q.where('server_id', tripId)
         ).fetch();
         
         // If not found, try by local ID
@@ -318,4 +324,4 @@ const offlineApi = {
   }
 };
 
-export default offlineApi; 
+export default offlineApi;

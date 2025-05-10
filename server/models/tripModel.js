@@ -22,6 +22,20 @@ const participantSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+const coordinatesSchema = new mongoose.Schema({
+  lat: {
+    type: Number,
+    required: true
+  },
+  lon: {
+    type: Number,
+    required: true
+  },
+  displayName: {
+    type: String
+  }
+}, { _id: false });
+
 const itineraryItemSchema = new mongoose.Schema({
   day: {
     type: Number,
@@ -40,6 +54,10 @@ const itineraryItemSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  coordinates: {
+    type: coordinatesSchema,
+    default: null
+  },
   startTime: {
     type: Date
   },
@@ -51,6 +69,9 @@ const itineraryItemSchema = new mongoose.Schema({
     default: 0
   }
 }, { timestamps: true });
+
+// No need to modify the Trip schema as documents will be stored in a separate collection
+// with a reference to the trip ID. This allows for better scaling and performance.
 
 const tripSchema = new mongoose.Schema({
   name: {
@@ -74,9 +95,11 @@ const tripSchema = new mongoose.Schema({
   endDate: {
     type: Date
   },
-  itinerary: [itineraryItemSchema]
+  itinerary: [itineraryItemSchema],
+  // We're not storing documents directly in the trip schema
+  // Instead, documents will be queried from the Document collection using tripId
 }, { timestamps: true });
 
 const Trip = mongoose.model('Trip', tripSchema);
 
-export default Trip; 
+export default Trip;

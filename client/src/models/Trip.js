@@ -9,6 +9,7 @@ export default class Trip extends Model {
     itinerary_items: { type: 'has_many', foreignKey: 'trip_id' },
     messages: { type: 'has_many', foreignKey: 'trip_id' },
     expenses: { type: 'has_many', foreignKey: 'trip_id' },
+    documents: { type: 'has_many', foreignKey: 'trip_id' },
   };
 
   @text('name') name;
@@ -25,6 +26,7 @@ export default class Trip extends Model {
   @children('itinerary_items') itineraryItems;
   @children('messages') messages;
   @children('expenses') expenses;
+  @children('documents') documents;
 
   @action async markAsSynced(serverId) {
     return this.update(trip => {
