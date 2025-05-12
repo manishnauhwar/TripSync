@@ -93,7 +93,7 @@ const RegisterScreen = ({ navigation }) => {
 
     return (
         <ImageBackground
-            source={require('../assets/images/5.jpeg')}
+            source={require('../assets/images/7.jpeg')}
             style={styles.backgroundImage}
         >
             <StatusBar

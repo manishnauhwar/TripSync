@@ -10,30 +10,43 @@ class OfflineService {
     this.isSyncing = false;
     this.syncSubscribers = [];
     this.unsubscribeNetInfo = null;
+    this.databaseReady = false;
   }
 
   async initialize() {
-    // Set up network state listener
-    this.unsubscribeNetInfo = NetInfo.addEventListener(state => {
-      const wasOnline = this.isOnline;
+    try {
+      // Ensure database is initialized
+      if (!database) {
+        throw new Error('Database not initialized');
+      }
+      this.databaseReady = true;
+
+      // Set up network state listener
+      this.unsubscribeNetInfo = NetInfo.addEventListener(state => {
+        const wasOnline = this.isOnline;
+        this.isOnline = state.isConnected && state.isInternetReachable;
+        
+        // Notify subscribers of connection state change
+        this.notifySubscribers(this.isOnline ? 'online' : 'offline');
+        
+        // If we just came online and database is ready, try to sync
+        if (!wasOnline && this.isOnline && this.databaseReady) {
+          this.syncWithServer();
+        }
+      });
+
+      // Check initial network state
+      const state = await NetInfo.fetch();
       this.isOnline = state.isConnected && state.isInternetReachable;
       
-      // Notify subscribers of connection state change
-      this.notifySubscribers(this.isOnline ? 'online' : 'offline');
-      
-      // If we just came online, try to sync
-      if (!wasOnline && this.isOnline) {
+      // Sync if we're online and database is ready
+      if (this.isOnline && this.databaseReady) {
         this.syncWithServer();
       }
-    });
-
-    // Check initial network state
-    const state = await NetInfo.fetch();
-    this.isOnline = state.isConnected && state.isInternetReachable;
-    
-    // Sync if we're online
-    if (this.isOnline) {
-      this.syncWithServer();
+    } catch (error) {
+      console.error('Error initializing OfflineService:', error);
+      this.databaseReady = false;
+      throw error;
     }
   }
 
@@ -72,28 +85,48 @@ class OfflineService {
         throw new Error('Not authenticated');
       }
 
+      // Track sync progress
+      let progress = 0;
+      const totalSteps = 6; // Number of sync operations
+
       // Sync trips
       await this.syncTrips();
+      progress++;
+      this.notifySubscribers('progress', { current: progress, total: totalSteps, type: 'trips' });
       
       // Sync participants
       await this.syncParticipants();
+      progress++;
+      this.notifySubscribers('progress', { current: progress, total: totalSteps, type: 'participants' });
       
       // Sync itinerary items
       await this.syncItineraryItems();
+      progress++;
+      this.notifySubscribers('progress', { current: progress, total: totalSteps, type: 'itinerary' });
       
       // Sync messages
       await this.syncMessages();
+      progress++;
+      this.notifySubscribers('progress', { current: progress, total: totalSteps, type: 'messages' });
       
       // Sync expenses and splits
       await this.syncExpenses();
+      progress++;
+      this.notifySubscribers('progress', { current: progress, total: totalSteps, type: 'expenses' });
       
       // Sync documents
       await this.syncDocuments();
+      progress++;
+      this.notifySubscribers('progress', { current: progress, total: totalSteps, type: 'documents' });
 
       this.notifySubscribers('completed');
     } catch (error) {
       console.error('Sync error:', error);
-      this.notifySubscribers('failed', error.message);
+      this.notifySubscribers('failed', {
+        message: error.message,
+        type: error.type || 'unknown',
+        retryable: error.retryable !== false
+      });
     } finally {
       this.isSyncing = false;
     }

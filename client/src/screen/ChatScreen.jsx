@@ -77,7 +77,7 @@ const ChatScreen = ({ route, navigation }) => {
 
           if (messagesRes.success) {
             const formattedMessages = messagesRes.data.data
-              .filter(msg => !msg.deleted) // Filter out deleted messages
+              .filter(msg => !msg.deleted) 
               .map((msg) => ({
                 ...msg,
                 sender: { ...msg.sender, _id: msg.sender._id || msg.sender.id },
@@ -128,7 +128,6 @@ const ChatScreen = ({ route, navigation }) => {
     if (route.params?.location) {
       const loadUserAndShareLocation = async () => {
         try {
-          // Load user data if not already loaded
           if (!currentUser) {
             const userData = await AsyncStorage.getItem('userDetails');
             if (userData) {
@@ -192,7 +191,6 @@ const ChatScreen = ({ route, navigation }) => {
   const handleMessageDeleted = (data) => {
     const { messageId, deleteForEveryone } = data;
     
-    // If deleting for everyone, remove the message for all users
     if (deleteForEveryone) {
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg._id !== messageId)
@@ -200,17 +198,13 @@ const ChatScreen = ({ route, navigation }) => {
       return;
     }
     
-    // If not deleting for everyone, only the sender can delete their own message UI
-    // The server will handle filtering deleted messages for the individual user on next load
     const userId = currentUser ? currentUser._id || currentUser.id : null;
     const message = messages.find(msg => msg._id === messageId);
     
-    // If message not found in our state, nothing to do
     if (!message) return;
     
     const senderId = message.sender._id || message.sender.id;
     
-    // Check if current user is the sender
     if (userId && senderId && String(userId) === String(senderId)) {
       setMessages(prevMessages => 
         prevMessages.filter(msg => msg._id !== messageId)
@@ -355,7 +349,7 @@ const ChatScreen = ({ route, navigation }) => {
             sender: { ...serverMessage.sender, _id: serverMessage.sender._id || serverMessage.sender.id }
           } : msg
         ));
-        socketService.sendMessage(tripId, content);
+        socketService.sendMessage(tripId, content, 'text', null, null, serverMessage);
       } else {
         setMessages(prev => prev.map(msg => 
           msg._id === tempId ? { ...msg, failed: true } : msg
@@ -558,7 +552,7 @@ const ChatScreen = ({ route, navigation }) => {
             sender: { ...serverMessage.sender, _id: serverMessage.sender._id || serverMessage.sender.id }
           } : msg
         ));
-        socketService.sendMessage(tripId, 'Shared an image', 'image', mediaUrl);
+        socketService.sendMessage(tripId, 'Shared an image', 'image', mediaUrl, null, serverMessage);
         
         setTimeout(() => {
           if (flatListRef.current) {
@@ -622,7 +616,7 @@ const ChatScreen = ({ route, navigation }) => {
             sender: { ...serverMessage.sender, _id: serverMessage.sender._id || serverMessage.sender.id }
           } : msg
         ));
-        socketService.sendMessage(tripId, 'Shared a location', 'location', null, locationData);
+        socketService.sendMessage(tripId, 'Shared a location', 'location', null, locationData, serverMessage);
       } else {
         setMessages(prev => prev.map(msg => 
           msg._id === tempId ? { ...msg, failed: true } : msg

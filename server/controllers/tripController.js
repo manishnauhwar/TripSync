@@ -38,7 +38,8 @@ export const getUserTrips = async (req, res) => {
     const userId = req.user._id;
 
     const trips = await Trip.find({
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     }).populate('creator', 'username fullName email');
 
     res.status(200).json({
@@ -61,7 +62,8 @@ export const getTrip = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     }).populate('creator', 'username fullName email')
       .populate('participants.user', 'username fullName email');
 

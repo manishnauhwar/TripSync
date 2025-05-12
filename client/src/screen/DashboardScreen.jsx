@@ -21,7 +21,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import api from '../apis/api';
 import { LinearGradient } from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { navigationRef } from '../apis/navigationRef';
+// import { navigationRef } from '../apis/navigationRef';
 
 const { width, height } = Dimensions.get('window');
 
@@ -250,6 +250,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+    marginBottom: 30,
   },
   header: {
     paddingHorizontal: 16,

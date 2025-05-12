@@ -30,35 +30,51 @@ const isOnline = async () => {
 
 // Safe database operation handler
 const safeDBOperation = async (operation) => {
-  try {
-    // Check if database module is available
-    let database;
+  let retries = 3;
+  let lastError = null;
+
+  while (retries > 0) {
     try {
-      // Fix: Use correct import path and handle potential errors
-      const dbModule = require('../models/database');
-      database = dbModule.database;
-      
-      if (!database) {
-        console.error('Database not found in module');
-        return { success: false, error: 'Database not available' };
+      // Check if database module is available
+      let database;
+      try {
+        // Fix: Use correct import path and handle potential errors
+        const dbModule = require('../models/database');
+        database = dbModule.database;
+        
+        if (!database) {
+          console.error('Database not found in module');
+          throw new Error('Database not available');
+        }
+      } catch (error) {
+        console.error('Database module not available:', error);
+        throw error;
       }
+      
+      // Check if database is properly initialized
+      if (!database) {
+        console.error('Database not initialized');
+        throw new Error('Database not initialized');
+      }
+      
+      // Execute the operation
+      return await operation(database);
     } catch (error) {
-      console.error('Database module not available:', error);
-      return { success: false, error: 'Database not available' };
+      lastError = error;
+      console.error(`Database operation failed (${retries} retries left):`, error);
+      retries--;
+      if (retries > 0) {
+        // Wait for 1 second before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     }
-    
-    // Check if database is properly initialized
-    if (!database) {
-      console.error('Database not initialized');
-      return { success: false, error: 'Database not initialized' };
-    }
-    
-    // Execute the operation
-    return await operation(database);
-  } catch (error) {
-    console.error('Database operation error:', error);
-    return { success: false, error: 'Database operation failed' };
   }
+
+  return {
+    success: false,
+    error: lastError?.message || 'Database operation failed after retries',
+    offlineMode: true
+  };
 };
 
 const offlineApi = {
@@ -79,23 +95,22 @@ const offlineApi = {
           
           if (result.success) {
             // Try to store in local database, but continue even if it fails
-            try {
-              await safeDBOperation(async (database) => {
-                await database.write(async () => {
-                  await database.get('trips').create(trip => {
-                    trip.name = tripData.name;
-                    trip.description = tripData.description || '';
-                    trip.creatorId = userId;
-                    trip.startDate = tripData.startDate ? new Date(tripData.startDate) : null;
-                    trip.endDate = tripData.endDate ? new Date(tripData.endDate) : null;
-                    trip.serverId = result.data._id || result.data.id;
-                    trip.isSynced = true;
-                  });
+            const dbResult = await safeDBOperation(async (database) => {
+              await database.write(async () => {
+                await database.get('trips').create(trip => {
+                  trip.name = tripData.name;
+                  trip.description = tripData.description || '';
+                  trip.creatorId = userId;
+                  trip.startDate = tripData.startDate ? new Date(tripData.startDate) : null;
+                  trip.endDate = tripData.endDate ? new Date(tripData.endDate) : null;
+                  trip.serverId = result.data._id || result.data.id;
+                  trip.isSynced = true;
                 });
               });
-            } catch (dbError) {
-              console.error('Failed to store trip in local database:', dbError);
-              // We still return success because the server operation succeeded
+            });
+
+            if (!dbResult.success) {
+              console.warn('Failed to store trip in local database:', dbResult.error);
             }
             
             return result;
@@ -106,12 +121,10 @@ const offlineApi = {
         }
       }
       
-      // Offline mode or if online operation failed
+      // Offline mode - store locally
       const dbResult = await safeDBOperation(async (database) => {
-        let newTripData = null;
-        
-        await database.write(async () => {
-          newTripData = await database.get('trips').create(trip => {
+        const trip = await database.write(async () => {
+          return await database.get('trips').create(trip => {
             trip.name = tripData.name;
             trip.description = tripData.description || '';
             trip.creatorId = userId;
@@ -121,22 +134,25 @@ const offlineApi = {
           });
         });
         
-        return { 
-          success: true, 
-          data: newTripData,
-          offlineMode: true 
+        return {
+          success: true,
+          data: {
+            _id: trip.id,
+            ...tripData,
+            offlineRecord: true
+          },
+          offlineMode: true
         };
       });
       
-      if (dbResult.success) {
-        return dbResult;
-      }
-      
-      // If both online and offline modes failed, return error
-      return { success: false, error: 'Failed to create trip in both online and offline modes' };
+      return dbResult;
     } catch (error) {
       console.error('Create trip error:', error);
-      return { success: false, error: 'Failed to create trip' };
+      return {
+        success: false,
+        error: 'Failed to create trip',
+        offlineMode: true
+      };
     }
   },
   

@@ -104,9 +104,20 @@ class SocketService {
   }
 
   // Send a message
-  sendMessage(tripId, content, type = 'text', mediaUrl = null, location = null) {
+  sendMessage(tripId, content, type = 'text', mediaUrl = null, location = null, serverMessage = null) {
     if (this.isConnected && this.socket) {
       console.log('Emitting message via socket:', { tripId, content, type });
+      
+      // If we have a complete server message, send that
+      if (serverMessage) {
+        this.socket.emit('forward-message', {
+          tripId,
+          message: serverMessage
+        });
+        return true;
+      }
+      
+      // Otherwise send the individual fields
       this.socket.emit('send-message', {
         tripId,
         content,
@@ -120,6 +131,14 @@ class SocketService {
       // Try to reconnect and send
       this.connect().then(connected => {
         if (connected) {
+          if (serverMessage) {
+            this.socket.emit('forward-message', {
+              tripId,
+              message: serverMessage
+            });
+            return true;
+          }
+          
           this.socket.emit('send-message', {
             tripId,
             content,

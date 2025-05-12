@@ -128,6 +128,17 @@ io.on('connection', (socket) => {
                 }
             });
             
+            socket.on('forward-message', (data) => {
+                const { tripId, message } = data;
+                if (!tripId || !message || !message._id) {
+                    console.error('Invalid message format for forward-message');
+                    return;
+                }
+                
+                console.log(`User ${userId} forwarding message to trip ${tripId}`);
+                io.to(`trip-${tripId}`).emit('new-message', message);
+            });
+            
             socket.on('delete-message', async (data) => {
                 const { tripId, messageId, deleteForEveryone } = data;
                 

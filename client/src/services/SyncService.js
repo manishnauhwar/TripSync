@@ -15,46 +15,53 @@ class SyncService {
     this.syncSubscribers = [];
     this.unsubscribeNetInfo = null;
     this.databaseReady = false;
+    this.syncRetryCount = 0;
+    this.maxSyncRetries = 3;
   }
 
   /**
    * Initialize the sync service
    */
-  initialize() {
-    // Load last sync timestamp
-    this.loadLastSyncTimestamp();
-    
-    // Set up network state listener
-    this.unsubscribeNetInfo = NetInfo.addEventListener(state => {
-      const wasOnline = this.isOnline;
+  async initialize() {
+    try {
+      // Load last sync timestamp
+      await this.loadLastSyncTimestamp();
+      
+      // Set up network state listener
+      this.unsubscribeNetInfo = NetInfo.addEventListener(state => {
+        const wasOnline = this.isOnline;
+        if (Platform.OS === 'android') {
+          this.isOnline = state.isConnected;
+        } else {
+          this.isOnline = state.isConnected && state.isInternetReachable;
+        }
+        
+        // Notify subscribers of connection state change
+        this.notifySubscribers(this.isOnline ? 'online' : 'offline');
+        
+        // If we just came online and database is ready, try to sync
+        if (!wasOnline && this.isOnline && this.databaseReady) {
+          this.syncWithServer();
+        }
+      });
+      
+      // Check initial network state
+      const state = await NetInfo.fetch();
       if (Platform.OS === 'android') {
         this.isOnline = state.isConnected;
       } else {
         this.isOnline = state.isConnected && state.isInternetReachable;
       }
       
-      // Notify subscribers of connection state change
-      this.notifySubscribers(this.isOnline ? 'online' : 'offline');
-      
-      // If we just came online, try to sync
-      if (!wasOnline && this.isOnline) {
+      // Sync if we're online and database is ready
+      if (this.isOnline && this.databaseReady) {
         this.syncWithServer();
       }
-    });
-    
-    // Check initial network state
-    NetInfo.fetch().then(state => {
-      if (Platform.OS === 'android') {
-        this.isOnline = state.isConnected;
-      } else {
-        this.isOnline = state.isConnected && state.isInternetReachable;
-      }
-      
-      // Sync if we're online
-      if (this.isOnline) {
-        this.syncWithServer();
-      }
-    });
+    } catch (error) {
+      console.error('Error initializing SyncService:', error);
+      this.databaseReady = false;
+      throw error;
+    }
   }
 
   /**
@@ -122,7 +129,9 @@ class SyncService {
    * This is a placeholder that will be replaced when the database is ready
    */
   async syncWithServer() {
-    if (this.isSyncing || !this.isOnline) return;
+    if (this.isSyncing || !this.isOnline || !this.databaseReady) {
+      return;
+    }
     
     this.isSyncing = true;
     this.notifySubscribers('started');
@@ -130,26 +139,60 @@ class SyncService {
     try {
       const token = await AsyncStorage.getItem('token');
       if (!token) {
-        this.isSyncing = false;
-        this.notifySubscribers('failed', 'Not authenticated');
-        return;
+        throw new Error('Not authenticated');
       }
+
+      // Reset retry count on successful sync start
+      this.syncRetryCount = 0;
+
+      // Perform sync operations
+      await this.performSync();
+
+      // Update last sync timestamp
+      this.lastSyncTimestamp = Date.now();
+      await AsyncStorage.setItem('lastSyncTimestamp', this.lastSyncTimestamp.toString());
       
-      // In this simplified version, we just check if the API is reachable
-      const response = await api.getTrips();
-      
-      if (response.success) {
-        // Store timestamps even in this simplified version
-        await this.updateLastSyncTimestamp();
-        this.notifySubscribers('completed');
-      } else {
-        this.notifySubscribers('failed', 'API request failed');
-      }
+      this.notifySubscribers('completed');
     } catch (error) {
       console.error('Sync error:', error);
-      this.notifySubscribers('failed', error.message || 'Unknown error');
+      
+      // Implement retry logic
+      if (this.syncRetryCount < this.maxSyncRetries) {
+        this.syncRetryCount++;
+        console.log(`Retrying sync (attempt ${this.syncRetryCount}/${this.maxSyncRetries})...`);
+        
+        // Wait for 5 seconds before retrying
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        this.isSyncing = false;
+        this.syncWithServer();
+      } else {
+        this.notifySubscribers('failed', error.message);
+      }
     } finally {
-      this.isSyncing = false;
+      if (this.syncRetryCount >= this.maxSyncRetries) {
+        this.isSyncing = false;
+      }
+    }
+  }
+
+  async performSync() {
+    try {
+      // Get the OfflineService instance
+      const offlineService = require('./OfflineService').default;
+      
+      // Sync all data types
+      await offlineService.syncTrips();
+      await offlineService.syncParticipants();
+      await offlineService.syncItineraryItems();
+      await offlineService.syncMessages();
+      await offlineService.syncExpenses();
+      await offlineService.syncDocuments();
+      
+      // Update last sync timestamp
+      await this.updateLastSyncTimestamp();
+    } catch (error) {
+      console.error('Error in performSync:', error);
+      throw error;
     }
   }
 

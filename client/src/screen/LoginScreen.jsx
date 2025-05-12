@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DeviceInfo from 'react-native-device-info';
 import notificationService from '../services/NotificationService';
+import permissionService from '../services/PermissionService';
 import { Platform } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { 
@@ -95,6 +96,10 @@ const LoginScreen = ({ navigation }) => {
                 await AsyncStorage.setItem('token', response.data.token);
                 await AsyncStorage.setItem('savedUsername', formattedUsernameOrEmail);
                 
+                // Request storage permissions
+                await permissionService.requestStoragePermission();
+                
+                // Initialize notifications
                 await registerFCMToken();
                 
                 // Force app to re-render by triggering a state change
@@ -175,6 +180,10 @@ const LoginScreen = ({ navigation }) => {
                 await AsyncStorage.setItem('token', backendResponse.data.token);
                 await AsyncStorage.setItem('savedUsername', firebaseUser.email);
                 
+                // Request storage permissions
+                await permissionService.requestStoragePermission();
+                
+                // Initialize notifications
                 await registerFCMToken();
                 
                 // Force app to re-render by triggering a state change
@@ -201,7 +210,7 @@ const LoginScreen = ({ navigation }) => {
 
     return (
         <ImageBackground
-            source={require('../assets/images/5.jpeg')}
+            source={require('../assets/images/7.jpeg')}
             style={styles.backgroundImage}
         >
             <StatusBar

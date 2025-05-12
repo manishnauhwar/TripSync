@@ -44,7 +44,8 @@ export const getItinerary = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {
@@ -81,7 +82,8 @@ export const addItineraryItem = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {
@@ -164,7 +166,8 @@ export const updateItineraryItem = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {
@@ -250,7 +253,8 @@ export const deleteItineraryItem = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {
@@ -317,7 +321,8 @@ export const reorderItineraryItems = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {

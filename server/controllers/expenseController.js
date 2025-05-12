@@ -17,7 +17,8 @@ export const getExpenses = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {
@@ -137,7 +138,8 @@ export const exportExpensesPdf = async (req, res) => {
     // Verify the user is a participant in this trip
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     }).populate('participants.user', 'email');
 
     if (!trip) {

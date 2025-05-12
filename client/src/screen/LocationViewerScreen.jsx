@@ -28,9 +28,13 @@ const LocationViewerScreen = ({ navigation, route }) => {
   const [hasPermission, setHasPermission] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [tripDetails, setTripDetails] = useState(null);
+  const [watchId, setWatchId] = useState(null);
   const mapRef = React.useRef(null);
   const colorScheme = useColorScheme();
   const isDarkMode = colorScheme === 'dark';
+  const [locationMethod, setLocationMethod] = useState('gps');
+  const [locationAttempts, setLocationAttempts] = useState(0);
+  const MAX_ATTEMPTS = 3;
 
   const theme = {
     background: isDarkMode ? 'rgba(18, 18, 18, 0.8)' : 'rgba(255, 255, 255, 0.8)',
@@ -44,11 +48,18 @@ const LocationViewerScreen = ({ navigation, route }) => {
   };
 
   useEffect(() => {
-    loadUserData();
-    loadTripDetails();
-    requestLocationPermission();
+    const initializeLocation = async () => {
+      await loadUserData();
+      await loadTripDetails();
+      const servicesEnabled = await checkLocationServices();
+      if (servicesEnabled) {
+        await requestLocationPermission();
+      }
+    };
+
+    initializeLocation();
+
     return () => {
-      // Cleanup watch position when component unmounts
       if (watchId) {
         Geolocation.clearWatch(watchId);
       }
@@ -81,16 +92,115 @@ const LocationViewerScreen = ({ navigation, route }) => {
     }
   };
 
+  const getLocationWithFallback = () => {
+    setLoading(true);
+    setError(null);
+    setLocationAttempts(prev => prev + 1);
+
+    // First try with high accuracy
+    Geolocation.getCurrentPosition(
+      (position) => {
+        handleLocationSuccess(position);
+      },
+      (error) => {
+        console.log('High accuracy location failed, trying network location...');
+        // If high accuracy fails, try with network location
+        Geolocation.getCurrentPosition(
+          (position) => {
+            handleLocationSuccess(position);
+          },
+          (error) => {
+            console.log('Network location failed, trying last known location...');
+            // If network location fails, try to get last known location
+            Geolocation.getLastKnownPosition(
+              (position) => {
+                handleLocationSuccess(position);
+              },
+              (error) => {
+                handleLocationError(error);
+              },
+              {
+                timeout: 5000,
+                maximumAge: 300000, // 5 minutes
+                enableHighAccuracy: false
+              }
+            );
+          },
+          {
+            timeout: 10000,
+            maximumAge: 300000, // 5 minutes
+            enableHighAccuracy: false
+          }
+        );
+      },
+      {
+        timeout: 10000,
+        maximumAge: 0,
+        enableHighAccuracy: true
+      }
+    );
+  };
+
+  const handleLocationSuccess = (position) => {
+    const { latitude, longitude, accuracy } = position.coords;
+    console.log('Location obtained:', { 
+      latitude, 
+      longitude, 
+      accuracy,
+      method: locationMethod 
+    });
+    
+    setCurrentLocation({ latitude, longitude });
+    setLoading(false);
+    
+    // Update map if available
+    if (mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude,
+        longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }, 1000);
+    }
+  };
+
+  const handleLocationError = (error) => {
+    console.error('Location error:', error);
+    let errorMessage = '';
+    
+    if (error.code === 1) {
+      errorMessage = 'Location permission denied. Please enable location services in your device settings.';
+    } else if (error.code === 2) {
+      errorMessage = 'Location services are disabled. Please enable GPS in your device settings.';
+    } else if (error.code === 3) {
+      if (locationAttempts < MAX_ATTEMPTS) {
+        // Retry with different settings
+        setTimeout(() => {
+          getLocationWithFallback();
+        }, 2000);
+        return;
+      }
+      errorMessage = 'Location request timed out. Please check your internet connection and try again.';
+    } else {
+      errorMessage = 'Unable to get location. Please check your device settings and try again.';
+    }
+    
+    setError(errorMessage);
+    setLoading(false);
+  };
+
   const requestLocationPermission = async () => {
     try {
       if (Platform.OS === 'ios') {
         const auth = await Geolocation.requestAuthorization('whenInUse');
         if (auth === 'granted') {
           setHasPermission(true);
-          getCurrentLocation();
-          startWatchingLocation();
+          setTimeout(() => {
+            getLocationWithFallback();
+            startWatchingLocation();
+          }, 1000);
         } else {
-          setError('Location permission denied');
+          setError('Location permission denied. Please enable in Settings.');
           setLoading(false);
         }
       } else {
@@ -106,78 +216,69 @@ const LocationViewerScreen = ({ navigation, route }) => {
         );
         if (granted === PermissionsAndroid.RESULTS.GRANTED) {
           setHasPermission(true);
-          getCurrentLocation();
-          startWatchingLocation();
+          setTimeout(() => {
+            getLocationWithFallback();
+            startWatchingLocation();
+          }, 1000);
         } else {
-          setError('Location permission denied');
+          setError('Location permission denied. Please enable in Settings.');
           setLoading(false);
         }
       }
     } catch (err) {
       console.error('Permission request error:', err);
-      setError('Failed to request location permission');
+      setError('Failed to request location permission. Please try again.');
       setLoading(false);
     }
   };
 
+  const getCurrentLocation = () => {
+    setLocationAttempts(0);
+    getLocationWithFallback();
+  };
+
   const startWatchingLocation = () => {
-    watchId = Geolocation.watchPosition(
+    if (watchId) {
+      Geolocation.clearWatch(watchId);
+    }
+
+    const newWatchId = Geolocation.watchPosition(
       (position) => {
-        const { latitude, longitude } = position.coords;
-        console.log('Location updated:', { latitude, longitude });
-        setCurrentLocation({ latitude, longitude });
-        if (mapRef.current) {
-          mapRef.current.animateToRegion({
-            latitude,
-            longitude,
-            latitudeDelta: 0.005,
-            longitudeDelta: 0.005,
-          }, 1000);
-        }
+        handleLocationSuccess(position);
       },
       (error) => {
-        console.error('Watch position error:', error);
+        handleLocationError(error);
       },
       {
         enableHighAccuracy: true,
-        distanceFilter: 10,
-        interval: 5000,
-        fastestInterval: 2000
+        distanceFilter: 5,
+        interval: 3000,
+        fastestInterval: 1000,
+        timeout: 15000,
+        maximumAge: 10000
       }
     );
+
+    setWatchId(newWatchId);
   };
 
-  const getCurrentLocation = () => {
-    setLoading(true);
-    setError(null);
-
-    Geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        console.log('Location obtained:', { latitude, longitude });
-        setCurrentLocation({ latitude, longitude });
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Location error:', error);
-        let errorMessage = 'Failed to get location. ';
-        if (error.code === 1) {
-          errorMessage += 'Location permission denied.';
-        } else if (error.code === 2) {
-          errorMessage += 'Location unavailable.';
-        } else if (error.code === 3) {
-          errorMessage += 'Location request timed out.';
+  const checkLocationServices = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        const enabled = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION);
+        if (!enabled) {
+          setError('Location services are disabled. Please enable GPS in your device settings.');
+          setLoading(false);
+          return false;
         }
-        setError(errorMessage);
-        setLoading(false);
-      },
-      { 
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 10000,
-        distanceFilter: 10
       }
-    );
+      return true;
+    } catch (err) {
+      console.error('Error checking location services:', err);
+      setError('Unable to check location services. Please try again.');
+      setLoading(false);
+      return false;
+    }
   };
 
   const handleShareLocation = () => {
@@ -196,7 +297,6 @@ const LocationViewerScreen = ({ navigation, route }) => {
       return;
     }
 
-    // Format location data properly
     const locationData = {
       latitude: currentLocation.latitude,
       longitude: currentLocation.longitude
@@ -206,7 +306,6 @@ const LocationViewerScreen = ({ navigation, route }) => {
     console.log('Current user:', currentUser);
     console.log('Trip details:', tripDetails);
 
-    // Format user data to match expected structure
     const formattedUser = {
       _id: currentUser.id || currentUser._id,
       username: currentUser.username,

@@ -143,7 +143,19 @@ export const deleteDocument = async (req, res) => {
     }
 
     // Check if user has permission (admin, the uploader, or an editor)
-    const trip = await Trip.findById(tripId);
+    const trip = await Trip.findOne({
+      _id: tripId,
+      'participants.user': userId,
+      'participants.status': 'accepted'
+    });
+
+    if (!trip) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to access this trip'
+      });
+    }
+
     const participant = trip.participants.find(
       p => p.user && p.user.toString() === userId.toString()
     );

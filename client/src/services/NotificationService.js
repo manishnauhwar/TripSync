@@ -5,17 +5,36 @@ import { PermissionsAndroid } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import api from '../apis/api';
 import { navigate } from '../apis/navigationRef';
+import notifee from '@notifee/react-native';
 
 class NotificationService {
   constructor() {
     this.isInitialized = false;
     this.unsubscribers = [];
+    this.channelId = null;
+  }
+
+  async createNotificationChannel() {
+    if (Platform.OS === 'android') {
+      // Create a channel
+      this.channelId = await notifee.createChannel({
+        id: 'tripsync_default_channel',
+        name: 'TripSync Notifications',
+        lights: true,
+        vibration: true,
+        importance: 4, // High importance for heads-up notifications
+      });
+      console.log('Notification channel created:', this.channelId);
+    }
   }
 
   async initialize() {
     if (this.isInitialized) return;
 
     try {
+      // Create notification channel first
+      await this.createNotificationChannel();
+      
       if (Platform.OS === 'ios') {
         const authStatus = await getMessaging().requestPermission();
         const enabled =
@@ -33,6 +52,8 @@ class NotificationService {
           );
           if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
             console.log('Notification permissions denied');
+            // Even without permission, continue with token retrieval
+            // as we may still be able to receive notifications when app is in foreground
           }
         } catch (err) {
           console.log('Error requesting Android notification permission:', err);
@@ -110,17 +131,40 @@ class NotificationService {
     }
   }
 
-  showLocalNotification(remoteMessage) {
-    if (!remoteMessage || !remoteMessage.notification) return;
+  async showLocalNotification(remoteMessage) {
+    if (!remoteMessage) return;
     
-    if (Platform.OS === 'android') {
-      console.log('Android notification will be shown automatically');
-    } else if (Platform.OS === 'ios') {
-      Alert.alert(
-        remoteMessage.notification.title || 'Notification',
-        remoteMessage.notification.body,
-        [{ text: 'OK' }]
-      );
+    try {
+      if (Platform.OS === 'android') {
+        // For Android, we need to display the notification manually when in foreground
+        const notification = remoteMessage.notification || {};
+        const data = remoteMessage.data || {};
+        
+        // Use notifee to display the notification
+        await notifee.displayNotification({
+          title: notification.title || 'TripSync Notification',
+          body: notification.body || '',
+          android: {
+            channelId: 'tripsync_default_channel',
+            smallIcon: 'ic_notification', // Make sure this matches your resource name
+            color: '#6200ea', // Make sure this matches your notification_color
+            priority: 'high',
+            pressAction: {
+              id: 'default',
+            },
+          },
+          data,
+        });
+      } else if (Platform.OS === 'ios') {
+        // For iOS, use Alert for foreground notifications
+        Alert.alert(
+          remoteMessage.notification?.title || 'Notification',
+          remoteMessage.notification?.body,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error showing local notification:', error);
     }
   }
 

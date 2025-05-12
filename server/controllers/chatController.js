@@ -21,7 +21,8 @@ export const getMessages = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {
@@ -122,7 +123,8 @@ export const markMessagesAsRead = async (req, res) => {
 
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {
@@ -162,7 +164,8 @@ export const deleteMessage = async (req, res) => {
     // Verify trip access
     const trip = await Trip.findOne({
       _id: tripId,
-      'participants.user': userId
+      'participants.user': userId,
+      'participants.status': 'accepted'
     });
 
     if (!trip) {
